@@ -154,7 +154,7 @@ export default function ChatBlock({
                     {isSidebarOpen ? "←" : "→"}
                   </motion.button>
                 )}
-                <h2 className="text-lg font-ppneue text-gray-900">Browser</h2>
+                <h2 className="text-lg font-ppneue text-gray-900">ブラウザ</h2>
               </div>
               <motion.button
                 onClick={onClose}
@@ -162,7 +162,7 @@ export default function ChatBlock({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Close
+                閉じる
               </motion.button>
             </motion.div>
 

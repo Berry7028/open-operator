@@ -63,7 +63,7 @@ export default function Sidebar({
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-ppneue text-gray-900">Chat History</h2>
+                <h2 className="text-lg font-ppneue text-gray-900">チャット履歴</h2>
                 {!isMobile && (
                   <kbd className="px-2 py-1 text-xs font-semibold text-gray-500 bg-gray-100 rounded-md">
                     ⌘K
@@ -108,7 +108,7 @@ export default function Sidebar({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF3B00] focus:border-transparent font-ppsupply"
-                placeholder="Type a message..."
+                placeholder="メッセージを入力..."
               />
               {!isMobile && (
                 <div className="absolute right-8 bottom-9 flex items-center gap-1 text-xs text-gray-400">

@@ -297,12 +297,12 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
         <div className="flex items-center gap-2">
           <Image
             src="/favicon.svg"
-            alt="Open Operator"
+            alt="オープンオペレーター"
             className="w-8 h-8"
             width={32}
             height={32}
           />
-          <span className="font-ppneue text-gray-900">Open Operator</span>
+          <span className="font-ppneue text-gray-900">オープンオペレーター</span>
         </div>
         <motion.button
           onClick={onClose}
@@ -310,7 +310,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
-          Close
+          閉じる
           {!isMobile && (
             <kbd className="px-2 py-1 text-xs bg-gray-100 rounded-md">ESC</kbd>
           )}
@@ -367,7 +367,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                 >
                   <div className="w-full h-full border border-gray-200 rounded-lg flex items-center justify-center">
                     <p className="text-gray-500 text-center">
-                      The agent has completed the task
+                      エージェントがタスクを完了しました
                       <br />
                       &quot;{initialMessage}&quot;
                     </p>
@@ -386,7 +386,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                     variants={messageVariants}
                     className="p-4 bg-blue-50 rounded-lg font-ppsupply"
                   >
-                    <p className="font-semibold">Goal:</p>
+                    <p className="font-semibold">目標:</p>
                     <p>{initialMessage}</p>
                   </motion.div>
                 )}
@@ -399,7 +399,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                   >
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">
-                        Step {step.stepNumber}
+                        ステップ {step.stepNumber}
                       </span>
                       <span className="px-2 py-1 bg-gray-100 rounded text-xs">
                         {step.tool}
@@ -407,7 +407,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                     </div>
                     <p className="font-medium">{step.text}</p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-semibold">Reasoning: </span>
+                      <span className="font-semibold">理由: </span>
                       {step.reasoning}
                     </p>
                   </motion.div>
@@ -417,7 +417,7 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                     variants={messageVariants}
                     className="p-4 bg-gray-50 rounded-lg font-ppsupply animate-pulse"
                   >
-                    Processing...
+                    処理中...
                   </motion.div>
                 )}
               </div>

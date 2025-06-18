@@ -21,12 +21,12 @@ const ppSupply = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Open Operator",
-  description: "Watch AI browse the web, for free",
+  title: "オープンオペレーター",
+  description: "AIがウェブを閲覧する様子を無料で見る",
   openGraph: {
     images: ["/og.png"],
-    title: "Open Operator",
-    description: "Watch AI browse the web, for free",
+    title: "オープンオペレーター",
+    description: "AIがウェブを閲覧する様子を無料で見る",
     url: "https://operator.browserbase.com",
   },
   icons: {
@@ -43,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="ja">
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         {/* Fallback for browsers that don't support SVG favicons */}
