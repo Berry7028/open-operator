@@ -10,12 +10,14 @@ import posthog from "posthog-js";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Loader2, X, Globe, Check, AlertCircle, Navigation, FileText, Eye, Brain, Sparkles, ExternalLink } from "lucide-react";
+import { Input } from "./ui/input";
+import { Loader2, X, Globe, Check, AlertCircle, Navigation, FileText, Eye, Brain, Sparkles, ExternalLink, Send, User, Bot, Plus } from "lucide-react";
 
 interface ChatFeedProps {
   initialMessage?: string;
   onClose: () => void;
   url?: string;
+  sessionId?: string | null;
 }
 
 export interface BrowserStep {
@@ -26,6 +28,14 @@ export interface BrowserStep {
   stepNumber?: number;
 }
 
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+  steps?: BrowserStep[];
+}
+
 interface AgentState {
   sessionId: string | null;
   sessionUrl: string | null;
@@ -33,7 +43,7 @@ interface AgentState {
   isLoading: boolean;
 }
 
-export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
+export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFeedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { width } = useWindowSize();
   const isMobile = width ? width < 768 : false;
@@ -41,6 +51,9 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isAgentFinished, setIsAgentFinished] = useState(false);
   const [contextId, setContextId] = useAtom(contextIdAtom);
+  const [inputValue, setInputValue] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  
   const agentStateRef = useRef<AgentState>({
     sessionId: null,
     sessionUrl: null,
@@ -66,11 +79,44 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
   }, []);
 
   useEffect(() => {
+    if (initialMessage) {
+      setMessages([{
+        id: Date.now().toString(),
+        type: 'user',
+        content: initialMessage,
+        timestamp: new Date()
+      }]);
+    }
+  }, [initialMessage]);
+
+  useEffect(() => {
     if (
       uiState.steps.length > 0 &&
       uiState.steps[uiState.steps.length - 1].tool === "CLOSE"
     ) {
       setIsAgentFinished(true);
+      
+      // 完了メッセージを追加
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        type: 'assistant',
+        content: 'タスクが完了しました。',
+        timestamp: new Date(),
+        steps: uiState.steps
+      }]);
+      
+      // セッション状態を完了に更新
+      if (sessionId) {
+        fetch(`/api/chat-history?id=${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'completed',
+            steps: uiState.steps
+          })
+        }).catch(console.error);
+      }
+      
       fetch("/api/session", {
         method: "DELETE",
         headers: {
@@ -81,11 +127,11 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
         }),
       });
     }
-  }, [uiState.sessionId, uiState.steps]);
+  }, [uiState.sessionId, uiState.steps, sessionId]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [uiState.steps, scrollToBottom]);
+  }, [messages, scrollToBottom]);
 
   useEffect(() => {
     console.log("useEffect called");
@@ -95,6 +141,15 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
 
       if (initialMessage && !agentStateRef.current.sessionId) {
         setIsLoading(true);
+        
+        // AIの応答メッセージを追加
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'タスクを実行しています...',
+          timestamp: new Date()
+        }]);
+
         try {
           const sessionResponse = await fetch("/api/session", {
             method: "POST",
@@ -189,10 +244,10 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
               const nextStepData = await nextStepResponse.json();
 
               if (!nextStepData.success) {
-                throw new Error("Failed to get next step");
+                console.error("Failed to get next step:", nextStepData.error);
+                break;
               }
 
-              // Add the next step to UI immediately after receiving it
               const nextStep = {
                 ...nextStepData.result,
                 stepNumber: agentStateRef.current.steps.length + 1,
@@ -205,11 +260,10 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
 
               setUiState((prev) => ({
                 ...prev,
-                steps: agentStateRef.current.steps,
+                steps: [...prev.steps, nextStep],
               }));
 
-              // Break after adding the CLOSE step to UI
-              if (nextStepData.done || nextStepData.result.tool === "CLOSE") {
+              if (nextStep.tool === "CLOSE") {
                 break;
               }
 
@@ -220,32 +274,29 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
+                  goal: initialMessage,
                   sessionId: sessionData.sessionId,
-                  step: nextStepData.result,
+                  step: nextStep,
                   action: "EXECUTE_STEP",
                 }),
               });
 
               const executeData = await executeResponse.json();
 
-              posthog.capture("agent_execute_step", {
-                goal: initialMessage,
-                sessionId: sessionData.sessionId,
-                contextId: sessionData.contextId,
-                step: nextStepData.result,
-              });
-
               if (!executeData.success) {
-                throw new Error("Failed to execute step");
-              }
-
-              if (executeData.done) {
+                console.error("Failed to execute step:", executeData.error);
                 break;
               }
             }
           }
         } catch (error) {
-          console.error("Session initialization error:", error);
+          console.error("Error initializing session:", error);
+          setMessages(prev => [...prev.slice(0, -1), {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'エラーが発生しました。もう一度お試しください。',
+            timestamp: new Date()
+          }]);
         } finally {
           setIsLoading(false);
         }
@@ -253,36 +304,17 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
     };
 
     initializeSession();
-  }, [initialMessage]);
-
-  // Spring configuration for smoother animations
-  const springConfig = {
-    type: "spring",
-    stiffness: 350,
-    damping: 30,
-  };
+  }, [initialMessage, contextId, setContextId]);
 
   const containerVariants = {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        ...springConfig,
-        staggerChildren: 0.1,
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.95,
-      transition: { duration: 0.2 },
-    },
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.3 } },
+    exit: { opacity: 0, transition: { duration: 0.2 } },
   };
 
   const messageVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
   };
 
   const getToolIcon = (tool: string) => {
@@ -297,59 +329,140 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
         return <Eye className="w-3 h-3" />;
       case "CLOSE":
         return <Check className="w-3 h-3" />;
+      case "WAIT":
+        return <Loader2 className="w-3 h-3 animate-spin" />;
+      case "NAVBACK":
+        return <Navigation className="w-3 h-3 rotate-180" />;
       default:
-        return null;
+        return <AlertCircle className="w-3 h-3" />;
     }
   };
 
   const getToolVariant = (tool: string) => {
     switch (tool) {
       case "GOTO":
-        return "default";
-      case "ACT":
         return "secondary";
+      case "ACT":
+        return "default";
       case "EXTRACT":
         return "outline";
       case "OBSERVE":
-        return "outline";
+        return "secondary";
       case "CLOSE":
         return "default";
-      default:
+      case "WAIT":
+        return "outline";
+      case "NAVBACK":
         return "secondary";
+      default:
+        return "outline";
     }
   };
 
   const getToolColor = (tool: string) => {
     switch (tool) {
       case "GOTO":
-        return "from-blue-500/20 to-purple-500/20";
+        return "from-blue-500/20 to-cyan-500/10";
       case "ACT":
-        return "from-green-500/20 to-emerald-500/20";
+        return "from-green-500/20 to-emerald-500/10";
       case "EXTRACT":
-        return "from-yellow-500/20 to-orange-500/20";
+        return "from-purple-500/20 to-pink-500/10";
       case "OBSERVE":
-        return "from-purple-500/20 to-pink-500/20";
+        return "from-yellow-500/20 to-orange-500/10";
       case "CLOSE":
-        return "from-green-500/20 to-teal-500/20";
+        return "from-green-500/20 to-emerald-500/10";
+      case "WAIT":
+        return "from-gray-500/20 to-slate-500/10";
+      case "NAVBACK":
+        return "from-blue-500/20 to-indigo-500/10";
       default:
-        return "from-gray-500/20 to-zinc-500/20";
+        return "from-gray-500/20 to-slate-500/10";
     }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!message.trim() || isLoading) return;
+
+    // ユーザーメッセージを追加
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue("");
+    setIsLoading(true);
+
+    // AIの応答を追加
+    const assistantMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      type: 'assistant',
+      content: '追加のタスクを実行しています...',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, assistantMessage]);
+
+    try {
+      // 新しいリクエストでエージェントを実行
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          goal: message,
+          sessionId: uiState.sessionId,
+          action: "START",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 成功レスポンスでメッセージを更新
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessage.id 
+            ? { ...msg, content: `タスクを開始しました: ${message}` }
+            : msg
+        ));
+      } else {
+        // エラー時のメッセージ更新
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessage.id 
+            ? { ...msg, content: 'エラーが発生しました。もう一度お試しください。' }
+            : msg
+        ));
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessage.id 
+          ? { ...msg, content: 'エラーが発生しました。もう一度お試しください。' }
+          : msg
+      ));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSendMessage(inputValue);
   };
 
   return (
     <motion.div
-      className="min-h-screen bg-black flex flex-col relative overflow-hidden"
+      className="min-h-screen bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
       exit="exit"
     >
-      {/* Background effects */}
-      <div className="absolute inset-0 bg-gradient-radial from-orange-900/10 via-black to-black" />
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%239C92AC&quot; fill-opacity=&quot;0.03&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]" />
-      
       <motion.nav
-        className="relative z-50 flex justify-between items-center px-8 py-6 border-b border-zinc-800/50 backdrop-blur-xl bg-black/50"
+        className="relative z-50 flex justify-between items-center px-6 py-4 border-b border-[#2a2a2a] bg-[#171717]"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -361,224 +474,250 @@ export default function ChatFeed({ initialMessage, onClose }: ChatFeedProps) {
             transition={{ duration: 0.8, type: "spring" }}
             className="relative"
           >
-            <div className="absolute inset-0 bg-primary rounded-full blur-xl opacity-50" />
-            <Image
-              src="/favicon.svg"
-              alt="オープンオペレーター"
-              className="w-10 h-10 relative z-10"
-              width={40}
-              height={40}
-            />
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center">
+              <Image
+                src="/favicon.svg"
+                alt="オープンオペレーター"
+                className="w-6 h-6"
+                width={24}
+                height={24}
+              />
+            </div>
           </motion.div>
           <div>
-            <h1 className="font-ppneue text-white text-xl">オープンオペレーター</h1>
-            <p className="text-xs text-zinc-500 font-ppsupply">セッション実行中</p>
+            <h1 className="font-semibold text-white text-lg">オープンオペレーター</h1>
+            <p className="text-xs text-gray-400">AI セッション実行中</p>
           </div>
         </div>
         <Button
           onClick={onClose}
           variant="ghost"
-          className="gap-2 text-zinc-400 hover:text-white"
+          className="gap-2 text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
         >
           <X className="w-4 h-4" />
           閉じる
           {!isMobile && (
-            <kbd className="px-2 py-1 text-xs bg-zinc-900 rounded-md border border-zinc-800">ESC</kbd>
+            <kbd className="px-2 py-1 text-xs bg-[#2a2a2a] rounded-md border border-[#3a3a3a]">ESC</kbd>
           )}
         </Button>
       </motion.nav>
       
-      <main className="flex-1 flex flex-col items-center p-6 relative z-10">
-        <motion.div
-          className="w-full max-w-[1400px]"
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="glass-dark border-zinc-800/50 shadow-2xl overflow-hidden">
-            <div className="w-full h-10 bg-zinc-900/50 border-b border-zinc-800/50 flex items-center px-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-all" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80 hover:bg-yellow-500 transition-all" />
-                <div className="w-3 h-3 rounded-full bg-green-500/80 hover:bg-green-500 transition-all" />
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                <Brain className="w-3 h-3 text-primary animate-pulse" />
-                <span className="text-xs text-zinc-500 font-ppsupply">AI Browser Session</span>
-              </div>
-            </div>
-
-            {(() => {
-              console.log("Session URL:", uiState.sessionUrl);
-              return null;
-            })()}
-
-            <div className="flex flex-col lg:flex-row">
-              {/* Browser View */}
-              <div className="flex-1 bg-zinc-950">
-                {uiState.sessionUrl && !isAgentFinished && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="p-6"
-                  >
-                    <div className="rounded-lg overflow-hidden shadow-2xl border border-zinc-800/50">
-                      <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-zinc-500" />
-                        <span className="text-xs text-zinc-500 font-mono">browser.session</span>
-                        <ExternalLink className="w-3 h-3 text-zinc-600 ml-auto" />
-                      </div>
-                      <div className="aspect-video bg-black">
-                        <iframe
-                          src={uiState.sessionUrl}
-                          className="w-full h-full"
-                          sandbox="allow-same-origin allow-scripts allow-forms"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          title="Browser Session"
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {isAgentFinished && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="p-6 h-full flex items-center justify-center min-h-[500px]"
-                  >
-                    <Card className="bg-zinc-900/50 border-zinc-800 max-w-md w-full">
-                      <CardContent className="p-8 text-center">
-                        <div className="w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Check className="w-10 h-10 text-green-500" />
-                        </div>
-                        <h3 className="text-xl font-ppneue text-white mb-2">
-                          タスク完了
-                        </h3>
-                        <p className="text-zinc-400 font-ppsupply">
-                          エージェントが正常に実行されました
-                        </p>
-                        <div className="mt-4 p-3 bg-zinc-800/50 rounded-lg">
-                          <p className="text-sm text-zinc-500 italic">
-                            &quot;{initialMessage}&quot;
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Steps Panel */}
-              <div className="lg:w-[450px] border-t lg:border-t-0 lg:border-l border-zinc-800/50 bg-zinc-900/30">
-                <div className="p-6 h-full">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-ppneue text-white">実行ステップ</h2>
+      <main className="flex-1 flex relative z-10">
+        {/* Left Chat Panel */}
+        <div className="w-1/2 flex flex-col border-r border-[#2a2a2a] bg-[#0a0a0a]">
+          {/* Chat Messages */}
+          <div 
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto p-6 space-y-4"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#3a3a3a transparent'
+            }}
+          >
+            {messages.map((message) => (
+              <motion.div
+                key={message.id}
+                variants={messageVariants}
+                initial="hidden"
+                animate="visible"
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`flex gap-3 max-w-[85%] ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {/* Avatar */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    message.type === 'user' 
+                      ? 'bg-orange-500' 
+                      : 'bg-[#2a2a2a]'
+                  }`}>
+                    {message.type === 'user' ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Bot className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   
-                  <div
-                    ref={chatContainerRef}
-                    className="h-[calc(100vh-250px)] overflow-y-auto space-y-4 pr-2"
-                    style={{
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: '#3f3f46 #18181b'
-                    }}
-                  >
-                    {initialMessage && (
-                      <motion.div variants={messageVariants}>
-                        <Card className="bg-gradient-to-br from-primary/10 to-orange-600/10 border-primary/20">
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Brain className="w-4 h-4 text-white" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-semibold text-white text-sm">タスク</p>
-                                <p className="text-zinc-300 mt-1 text-sm">{initialMessage}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    )}
-
-                    {uiState.steps.map((step, index) => (
-                      <motion.div
-                        key={index}
-                        variants={messageVariants}
-                        className="relative"
-                      >
-                        {index > 0 && (
-                          <div className="absolute left-4 -top-4 w-0.5 h-4 bg-zinc-800" />
-                        )}
-                        <Card className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all group">
-                          <CardContent className="p-4">
-                            <div className={`absolute inset-0 bg-gradient-to-br ${getToolColor(step.tool)} opacity-0 group-hover:opacity-100 transition-opacity rounded-xl`} />
-                            <div className="relative">
-                              <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center">
-                                    <span className="text-xs font-bold text-zinc-400">
-                                      {step.stepNumber}
-                                    </span>
-                                  </div>
-                                  <Badge 
-                                    variant={getToolVariant(step.tool) as any}
-                                    className="gap-1"
-                                  >
-                                    {getToolIcon(step.tool)}
-                                    {step.tool}
-                                  </Badge>
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-3 pl-10">
-                                <p className="text-sm text-white font-medium">{step.text}</p>
-                                <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-800">
-                                  <div className="flex items-start gap-2">
-                                    <AlertCircle className="w-3 h-3 text-zinc-500 mt-0.5" />
-                                    <p className="text-xs text-zinc-400 leading-relaxed">
-                                      {step.reasoning}
-                                    </p>
-                                  </div>
-                                </div>
-                                {step.instruction && (
-                                  <div className="text-xs text-zinc-600 font-mono bg-zinc-900/50 px-2 py-1 rounded">
-                                    {step.instruction}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                    
-                    {isLoading && (
-                      <motion.div variants={messageVariants}>
-                        <Card className="bg-zinc-900/50 border-zinc-800">
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="relative">
-                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                                <div className="absolute inset-0 bg-primary blur-xl opacity-50" />
-                              </div>
-                              <span className="text-zinc-400 font-ppsupply">処理中...</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    )}
+                  {/* Message Content */}
+                  <div className={`rounded-2xl px-4 py-3 ${
+                    message.type === 'user'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-[#2a2a2a] text-white'
+                  }`}>
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <p className="text-xs opacity-70 mt-1">
+                      {message.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                 </div>
+              </motion.div>
+            ))}
+
+            {isLoading && (
+              <motion.div
+                variants={messageVariants}
+                initial="hidden"
+                animate="visible"
+                className="flex justify-start"
+              >
+                <div className="flex gap-3 max-w-[85%]">
+                  <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="bg-[#2a2a2a] text-white rounded-2xl px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                      <span className="text-sm">処理中...</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="p-6 border-t border-[#2a2a2a]">
+            <form onSubmit={handleSubmit} className="flex gap-3">
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="追加のリクエストを入力..."
+                disabled={isLoading}
+                className="flex-1 bg-[#2a2a2a] border-[#3a3a3a] focus:border-orange-500 text-white placeholder:text-gray-500"
+              />
+              <Button
+                type="submit"
+                disabled={!inputValue.trim() || isLoading}
+                className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* Right Browser Panel */}
+        <div className="w-1/2 flex flex-col bg-[#0a0a0a]">
+          {/* Browser Header */}
+          <div className="p-4 border-b border-[#2a2a2a]">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-orange-500" />
+              <h2 className="text-sm font-semibold text-white">ブラウザビュー</h2>
+            </div>
+            {uiState.sessionUrl && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span>セッションアクティブ</span>
+              </div>
+            )}
+          </div>
+
+          {/* Browser Content */}
+          <div className="flex-1 p-4">
+            {uiState.sessionUrl && !isAgentFinished ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="h-full"
+              >
+                <div className="rounded-lg overflow-hidden shadow-2xl border border-[#2a2a2a] h-full">
+                  <div className="bg-[#171717] border-b border-[#2a2a2a] px-4 py-2 flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                      <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                      <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <span className="text-xs text-gray-400 font-mono">browser.session</span>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-gray-400" />
+                  </div>
+                  <div className="h-[calc(100%-40px)] bg-black">
+                    <iframe
+                      src={uiState.sessionUrl}
+                      className="w-full h-full"
+                      sandbox="allow-same-origin allow-scripts allow-forms"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      title="Browser Session"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            ) : isAgentFinished ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="h-full flex items-center justify-center"
+              >
+                <Card className="bg-[#171717] border-[#2a2a2a] max-w-md w-full">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Check className="w-8 h-8 text-green-500" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      セッション完了
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      すべてのタスクが正常に実行されました
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="h-full flex items-center justify-center"
+              >
+                <Card className="bg-[#171717] border-[#2a2a2a] max-w-md w-full">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Brain className="w-8 h-8 text-orange-500" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      セッション準備中
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      ブラウザセッションを初期化しています...
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Steps Summary */}
+          {uiState.steps.length > 0 && (
+            <div className="p-4 border-t border-[#2a2a2a] bg-[#171717]/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm font-medium text-white">実行ステップ</span>
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {uiState.steps.length} steps
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {uiState.steps.slice(-5).map((step, index) => (
+                  <Badge 
+                    key={index}
+                    variant={getToolVariant(step.tool) as any}
+                    className="text-xs gap-1"
+                  >
+                    {getToolIcon(step.tool)}
+                    {step.tool}
+                  </Badge>
+                ))}
+                {uiState.steps.length > 5 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{uiState.steps.length - 5}
+                  </Badge>
+                )}
               </div>
             </div>
-          </Card>
-        </motion.div>
+          )}
+        </div>
       </main>
     </motion.div>
   );
