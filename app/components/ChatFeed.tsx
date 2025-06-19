@@ -11,7 +11,7 @@ import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
-import { Loader2, X, Globe, Check, AlertCircle, Navigation, FileText, Eye, Brain, Sparkles, ExternalLink, Send, User, Bot, Plus } from "lucide-react";
+import { Loader2, X, Globe, Check, AlertCircle, Navigation, FileText, Eye, Brain, Sparkles, Send, User, Bot, Monitor } from "lucide-react";
 
 interface ChatFeedProps {
   initialMessage?: string;
@@ -172,18 +172,12 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
           agentStateRef.current = {
             ...agentStateRef.current,
             sessionId: sessionData.sessionId,
-            sessionUrl: sessionData.sessionUrl.replace(
-              "https://www.browserbase.com/devtools-fullscreen/inspector.html",
-              "https://www.browserbase.com/devtools-internal-compiled/index.html"
-            ),
+            sessionUrl: sessionData.sessionUrl,
           };
 
           setUiState({
             sessionId: sessionData.sessionId,
-            sessionUrl: sessionData.sessionUrl.replace(
-              "https://www.browserbase.com/devtools-fullscreen/inspector.html",
-              "https://www.browserbase.com/devtools-internal-compiled/index.html"
-            ),
+            sessionUrl: sessionData.sessionUrl,
             steps: [],
           });
 
@@ -359,26 +353,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     }
   };
 
-  const getToolColor = (tool: string) => {
-    switch (tool) {
-      case "GOTO":
-        return "from-blue-500/20 to-cyan-500/10";
-      case "ACT":
-        return "from-green-500/20 to-emerald-500/10";
-      case "EXTRACT":
-        return "from-purple-500/20 to-pink-500/10";
-      case "OBSERVE":
-        return "from-yellow-500/20 to-orange-500/10";
-      case "CLOSE":
-        return "from-green-500/20 to-emerald-500/10";
-      case "WAIT":
-        return "from-gray-500/20 to-slate-500/10";
-      case "NAVBACK":
-        return "from-blue-500/20 to-indigo-500/10";
-      default:
-        return "from-gray-500/20 to-slate-500/10";
-    }
-  };
+
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim() || isLoading) return;
@@ -627,19 +602,37 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                       <div className="w-3 h-3 rounded-full bg-green-500/80" />
                     </div>
                     <div className="flex-1 flex items-center justify-center">
-                      <span className="text-xs text-gray-400 font-mono">browser.session</span>
+                      <span className="text-xs text-gray-400 font-mono">local://browser-session</span>
                     </div>
-                    <ExternalLink className="w-3 h-3 text-gray-400" />
+                    <Monitor className="w-3 h-3 text-gray-400" />
                   </div>
-                  <div className="h-[calc(100%-40px)] bg-black">
-                    <iframe
-                      src={uiState.sessionUrl}
-                      className="w-full h-full"
-                      sandbox="allow-same-origin allow-scripts allow-forms"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      title="Browser Session"
-                    />
+                  <div className="h-[calc(100%-40px)] bg-black flex items-center justify-center">
+                    {uiState.sessionUrl.startsWith('local://') ? (
+                      <div className="text-center">
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Monitor className="w-8 h-8 text-blue-500" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">
+                          ローカルブラウザー実行中
+                        </h3>
+                        <p className="text-gray-400 text-sm mb-4">
+                          Playwrightがローカルでブラウザーを操作しています
+                        </p>
+                        <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <span>セッション ID: {uiState.sessionId}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <iframe
+                        src={uiState.sessionUrl}
+                        className="w-full h-full"
+                        sandbox="allow-same-origin allow-scripts allow-forms"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        title="Browser Session"
+                      />
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -702,7 +695,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 {uiState.steps.slice(-5).map((step, index) => (
                   <Badge 
                     key={index}
-                    variant={getToolVariant(step.tool) as any}
+                    variant={getToolVariant(step.tool) as "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"}
                     className="text-xs gap-1"
                   >
                     {getToolIcon(step.tool)}

@@ -14,11 +14,9 @@ type Step = {
 };
 
 async function runStagehand({
-  sessionID,
   method,
   instruction,
 }: {
-  sessionID: string;
   method:
     | "GOTO"
     | "ACT"
@@ -31,10 +29,12 @@ async function runStagehand({
   instruction?: string;
 }) {
   const stagehand = new Stagehand({
-    browserbaseSessionID: sessionID,
-    env: "BROWSERBASE",
+    env: "LOCAL",
     modelName: "google/gemini-2.0-flash",
     disablePino: true,
+    localBrowserLaunchOptions: {
+      headless: false,
+    },
   });
   await stagehand.init();
 
@@ -89,12 +89,10 @@ async function runStagehand({
 
 async function sendPrompt({
   goal,
-  sessionID,
   previousSteps = [],
   previousExtraction,
 }: {
   goal: string;
-  sessionID: string;
   previousSteps?: Step[];
   previousExtraction?: string | ObserveResult[];
 }) {
@@ -102,10 +100,12 @@ async function sendPrompt({
 
   try {
     const stagehand = new Stagehand({
-      browserbaseSessionID: sessionID,
-      env: "BROWSERBASE",
+      env: "LOCAL",
       disablePino: true,
       modelName: "google/gemini-2.0-flash",
+      localBrowserLaunchOptions: {
+        headless: false,
+      },
     });
     await stagehand.init();
     currentUrl = await stagehand.page.url();
@@ -159,7 +159,6 @@ If the goal has been achieved, return "close".`,
     content.push({
       type: "image",
       image: (await runStagehand({
-        sessionID,
         method: "SCREENSHOT",
       })) as string,
     });
@@ -269,7 +268,6 @@ export async function POST(request: Request) {
         };
 
         await runStagehand({
-          sessionID: sessionId,
           method: "GOTO",
           instruction: url,
         });
@@ -293,7 +291,6 @@ export async function POST(request: Request) {
         // Get the next step from the LLM
         const { result, previousSteps: newPreviousSteps } = await sendPrompt({
           goal,
-          sessionID: sessionId,
           previousSteps,
         });
 
@@ -316,7 +313,6 @@ export async function POST(request: Request) {
 
         // Execute the step using Stagehand
         const extraction = await runStagehand({
-          sessionID: sessionId,
           method: step.tool,
           instruction: step.instruction,
         });
