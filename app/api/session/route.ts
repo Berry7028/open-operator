@@ -162,37 +162,70 @@ export async function GET(request: Request) {
       );
     }
 
-    try {
-      // Get list of available tabs from Chrome DevTools Protocol
-      const response = await fetch(`http://127.0.0.1:${debugPort}/json`);
-      const tabs = await response.json();
-      
-      // Find the main tab (usually the first one)
-      const mainTab = tabs.find((tab: any) => tab.type === 'page');
-      
-      if (mainTab) {
-        return NextResponse.json({
-          success: true,
-          debugUrl: `http://127.0.0.1:${debugPort}`,
-          inspectorUrl: `http://127.0.0.1:${debugPort}/devtools/inspector.html?ws=${mainTab.webSocketDebuggerUrl.replace('ws://', '')}`,
-          tabs,
+    // Retry logic for CDP connection
+    const maxRetries = 10;
+    const retryDelay = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempting to connect to CDP (attempt ${attempt}/${maxRetries}) for port ${debugPort}`);
+        
+        // Get list of available tabs from Chrome DevTools Protocol
+        const response = await fetch(`http://127.0.0.1:${debugPort}/json`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000), // 5 second timeout
         });
-      } else {
-        return NextResponse.json({
-          success: true,
-          debugUrl: `http://127.0.0.1:${debugPort}`,
-          inspectorUrl: null,
-          tabs,
-        });
+
+        if (!response.ok) {
+          throw new Error(`CDP response not ok: ${response.status} ${response.statusText}`);
+        }
+
+        const tabs = await response.json();
+        console.log(`Successfully connected to CDP. Found ${tabs.length} tabs.`);
+        
+        // Find the main tab (usually the first one)
+        const mainTab = tabs.find((tab: any) => tab.type === 'page');
+        
+        if (mainTab) {
+          const inspectorUrl = `http://127.0.0.1:${debugPort}/devtools/inspector.html?ws=${mainTab.webSocketDebuggerUrl.replace('ws://', '')}`;
+          
+          return NextResponse.json({
+            success: true,
+            debugUrl: `http://127.0.0.1:${debugPort}`,
+            inspectorUrl,
+            tabs,
+            attempt,
+          });
+        } else {
+          // Return debug URL even if no main tab found
+          return NextResponse.json({
+            success: true,
+            debugUrl: `http://127.0.0.1:${debugPort}`,
+            inspectorUrl: `http://127.0.0.1:${debugPort}`,
+            tabs,
+            attempt,
+          });
+        }
+      } catch (error) {
+        console.error(`CDP connection attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          // Final attempt failed - return basic debug URL
+          console.log(`All CDP connection attempts failed. Returning basic debug URL for port ${debugPort}`);
+          return NextResponse.json({
+            success: true,
+            debugUrl: `http://127.0.0.1:${debugPort}`,
+            inspectorUrl: `http://127.0.0.1:${debugPort}`,
+            tabs: [],
+            error: `CDP connection failed after ${maxRetries} attempts: ${error}`,
+            attempt,
+          });
+        }
+        
+        // Wait before next attempt
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-    } catch (error) {
-      console.error('Error fetching DevTools info:', error);
-      return NextResponse.json({
-        success: true,
-        debugUrl: `http://127.0.0.1:${debugPort}`,
-        inspectorUrl: null,
-        tabs: [],
-      });
     }
   } catch (error) {
     console.error("Error getting session info:", error);

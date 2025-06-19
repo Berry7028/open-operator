@@ -193,20 +193,67 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
 
           // Try to get DevTools inspector URL
           if (sessionData.sessionUrl.startsWith('http://127.0.0.1:')) {
-            try {
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for browser to be ready
-              const devToolsResponse = await fetch(`/api/session?sessionId=${sessionData.sessionId}`);
-              const devToolsData = await devToolsResponse.json();
+            console.log('Starting DevTools URL retrieval for session:', sessionData.sessionId);
+            
+            const getDevToolsUrl = async (retryCount = 0): Promise<void> => {
+              const maxRetries = 15; // 15 attempts over ~30 seconds
+              const retryDelay = 2000; // 2 seconds between attempts
               
-              if (devToolsData.success && devToolsData.inspectorUrl) {
-                setUiState(prev => ({
-                  ...prev,
-                  inspectorUrl: devToolsData.inspectorUrl,
-                }));
+              try {
+                console.log(`Fetching DevTools URL (attempt ${retryCount + 1}/${maxRetries})`);
+                
+                const devToolsResponse = await fetch(`/api/session?sessionId=${sessionData.sessionId}`, {
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json' },
+                  signal: AbortSignal.timeout(10000), // 10 second timeout
+                });
+                
+                if (!devToolsResponse.ok) {
+                  throw new Error(`HTTP ${devToolsResponse.status}: ${devToolsResponse.statusText}`);
+                }
+                
+                const devToolsData = await devToolsResponse.json();
+                console.log('DevTools response:', devToolsData);
+                
+                if (devToolsData.success) {
+                  if (devToolsData.inspectorUrl) {
+                    console.log('Successfully got DevTools inspector URL:', devToolsData.inspectorUrl);
+                    setUiState(prev => ({
+                      ...prev,
+                      inspectorUrl: devToolsData.inspectorUrl,
+                    }));
+                  } else {
+                    console.log('No inspector URL available, using debug URL:', devToolsData.debugUrl);
+                    setUiState(prev => ({
+                      ...prev,
+                      inspectorUrl: devToolsData.debugUrl,
+                    }));
+                  }
+                } else {
+                  throw new Error(devToolsData.error || 'Unknown error from DevTools API');
+                }
+              } catch (error) {
+                console.error(`DevTools URL fetch attempt ${retryCount + 1} failed:`, error);
+                
+                if (retryCount < maxRetries - 1) {
+                  console.log(`Retrying in ${retryDelay}ms...`);
+                  setTimeout(() => {
+                    getDevToolsUrl(retryCount + 1);
+                  }, retryDelay);
+                } else {
+                  console.error('All DevTools URL fetch attempts failed. Using fallback.');
+                  // Fallback: show the debug port directly
+                  const debugPort = sessionData.sessionUrl.replace('http://127.0.0.1:', '');
+                  setUiState(prev => ({
+                    ...prev,
+                    inspectorUrl: `http://127.0.0.1:${debugPort}`,
+                  }));
+                }
               }
-            } catch (error) {
-              console.error('Error getting DevTools URL:', error);
-            }
+            };
+            
+            // Start the DevTools URL retrieval process
+            getDevToolsUrl();
           }
 
           const response = await fetch("/api/agent", {
@@ -653,9 +700,19 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                         <p className="text-gray-400 text-sm mb-4">
                           Chrome DevToolsへの接続を確立しています...
                         </p>
-                        <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
-                          <span>Debug Port: {uiState.sessionUrl.replace('http://127.0.0.1:', '')}</span>
+                        <div className="flex flex-col items-center gap-2 text-xs text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                            <span>Debug Port: {uiState.sessionUrl.replace('http://127.0.0.1:', '')}</span>
+                          </div>
+                          <a 
+                            href={uiState.sessionUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 underline mt-2"
+                          >
+                            デバッグページを直接開く
+                          </a>
                         </div>
                       </div>
                     ) : uiState.sessionUrl.startsWith('local://') ? (
