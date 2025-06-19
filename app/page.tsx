@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import ChatFeed from "./components/ChatFeed";
@@ -22,8 +23,19 @@ import {
   User,
   PenSquare,
   Clock,
-  Archive
+  Archive,
+  Brain,
+  Globe,
+  ArrowRight,
+  Github,
+  ExternalLink,
+  Zap,
+  Sparkles,
+  Star
 } from "lucide-react";
+import { Badge } from "./components/ui/badge";
+import ChatBlock from "./components/ChatBlock";
+import { PostHogProvider } from "./components/PosthogProvider";
 
 interface ChatSession {
   id: string;

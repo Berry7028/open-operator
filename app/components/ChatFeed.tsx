@@ -52,7 +52,14 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
   const [isAgentFinished, setIsAgentFinished] = useState(false);
   const [contextId, setContextId] = useAtom(contextIdAtom);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "1",
+      type: 'assistant',
+      content: `こんにちは！「${initialMessage}」のタスクを開始します。`,
+      timestamp: new Date()
+    }
+  ]);
   
   const agentStateRef = useRef<AgentState>({
     sessionId: null,
@@ -64,10 +71,12 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
   const [uiState, setUiState] = useState<{
     sessionId: string | null;
     sessionUrl: string | null;
+    inspectorUrl: string | null;
     steps: BrowserStep[];
   }>({
     sessionId: null,
     sessionUrl: null,
+    inspectorUrl: null,
     steps: [],
   });
 
@@ -178,8 +187,27 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
           setUiState({
             sessionId: sessionData.sessionId,
             sessionUrl: sessionData.sessionUrl,
+            inspectorUrl: null,
             steps: [],
           });
+
+          // Try to get DevTools inspector URL
+          if (sessionData.sessionUrl.startsWith('http://127.0.0.1:')) {
+            try {
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for browser to be ready
+              const devToolsResponse = await fetch(`/api/session?sessionId=${sessionData.sessionId}`);
+              const devToolsData = await devToolsResponse.json();
+              
+              if (devToolsData.success && devToolsData.inspectorUrl) {
+                setUiState(prev => ({
+                  ...prev,
+                  inspectorUrl: devToolsData.inspectorUrl,
+                }));
+              }
+            } catch (error) {
+              console.error('Error getting DevTools URL:', error);
+            }
+          }
 
           const response = await fetch("/api/agent", {
             method: "POST",
@@ -352,8 +380,6 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
         return "outline";
     }
   };
-
-
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim() || isLoading) return;
@@ -607,7 +633,32 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                     <Monitor className="w-3 h-3 text-gray-400" />
                   </div>
                   <div className="h-[calc(100%-40px)] bg-black flex items-center justify-center">
-                    {uiState.sessionUrl.startsWith('local://') ? (
+                    {uiState.inspectorUrl ? (
+                      <iframe
+                        src={uiState.inspectorUrl}
+                        className="w-full h-full"
+                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        title="Chrome DevTools Inspector"
+                      />
+                    ) : uiState.sessionUrl.startsWith('http://127.0.0.1:') ? (
+                      <div className="text-center">
+                        <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">
+                          DevTools準備中
+                        </h3>
+                        <p className="text-gray-400 text-sm mb-4">
+                          Chrome DevToolsへの接続を確立しています...
+                        </p>
+                        <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                          <span>Debug Port: {uiState.sessionUrl.replace('http://127.0.0.1:', '')}</span>
+                        </div>
+                      </div>
+                    ) : uiState.sessionUrl.startsWith('local://') ? (
                       <div className="text-center">
                         <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                           <Monitor className="w-8 h-8 text-blue-500" />
@@ -695,7 +746,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 {uiState.steps.slice(-5).map((step, index) => (
                   <Badge 
                     key={index}
-                    variant={getToolVariant(step.tool) as "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"}
+                    variant={getToolVariant(step.tool) as "default" | "destructive" | "outline" | "secondary"}
                     className="text-xs gap-1"
                   >
                     {getToolIcon(step.tool)}
