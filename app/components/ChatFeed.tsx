@@ -386,9 +386,9 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
       case "ACT":
         return "from-green-500/20 to-emerald-500/10";
       case "EXTRACT":
-        return "from-purple-500/20 to-pink-500/10";
+        return "from-gray-500/20 to-slate-500/10";
       case "OBSERVE":
-        return "from-yellow-500/20 to-orange-500/10";
+        return "from-gray-500/20 to-slate-500/10";
       case "CLOSE":
         return "from-green-500/20 to-emerald-500/10";
       case "WAIT":
@@ -515,7 +515,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
 
   return (
     <motion.div
-      className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/20 to-slate-950 text-white flex flex-col relative overflow-hidden"
+      className="min-h-screen bg-gradient-to-br from-slate-950 via-gray-950/20 to-slate-950 text-white flex flex-col relative overflow-hidden"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -612,7 +612,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   {/* Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     message.type === 'user' 
-                      ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25' 
+                      ? 'bg-gradient-to-br from-gray-500 to-gray-600 shadow-lg shadow-gray-500/25' 
                       : 'bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg'
                   }`}>
                     {message.type === 'user' ? (
@@ -625,7 +625,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   {/* Message Content */}
                   <div className={`rounded-2xl px-4 py-3 backdrop-blur-xl ${
                     message.type === 'user'
-                      ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25'
+                      ? 'bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg shadow-gray-500/25'
                       : 'bg-white/10 text-white border border-white/20 shadow-lg'
                   }`}>
                     <p className="text-sm leading-relaxed">{message.content}</p>
@@ -650,7 +650,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   </div>
                   <div className="bg-[#2a2a2a] text-white rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
                       <span className="text-sm">処理中...</span>
                     </div>
                   </div>
@@ -667,7 +667,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="追加のリクエストを入力..."
                 disabled={isLoading}
-                className="flex-1 bg-white/5 backdrop-blur-xl border border-white/20 focus:border-violet-500/50 text-white placeholder:text-gray-400 rounded-xl"
+                className="flex-1 bg-white/5 backdrop-blur-xl border border-white/20 focus:border-gray-500/50 text-white placeholder:text-gray-400 rounded-xl"
               />
               <Button
                 type="submit"
@@ -827,8 +827,8 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center border border-purple-500/30">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
+                  <div className="w-8 h-8 bg-gradient-to-br from-gray-500/20 to-slate-500/20 rounded-full flex items-center justify-center border border-gray-500/30">
+                    <Sparkles className="w-4 h-4 text-gray-400" />
                   </div>
                   <div>
                     <span className="text-sm font-semibold text-white">実行ステップ</span>
@@ -837,7 +837,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 </div>
                 <Badge 
                   variant="secondary" 
-                  className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/30 px-3 py-1"
+                  className="text-xs bg-gray-500/10 text-gray-400 border-gray-500/30 px-3 py-1"
                 >
                   {uiState.steps.length} steps
                 </Badge>

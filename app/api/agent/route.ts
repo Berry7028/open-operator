@@ -33,8 +33,12 @@ async function runStagehand({
   const stagehand = new Stagehand({
     browserbaseSessionID: sessionID,
     env: "BROWSERBASE",
-    modelName: "claude-3.5-sonnet",
+    modelName: "claude-3.5-haiku",
+    modelClientOptions: {
+      apiKey: process.env.ANTHROPIC_API_KEY || "",
+    },
     disablePino: true,
+    useAPI: false,
     verbose: 1, // Enable more verbose logging
   });
   
@@ -111,24 +115,37 @@ async function runStagehand({
     const page = stagehand.page;
 
     switch (method) {
-      case "GOTO":
-        await page.goto(instruction!, {
-          waitUntil: "commit",
-          timeout: 60000,
-        });
+      case "GOTO": {
+        const exec = async () => {
+          await page.goto(instruction!, {
+            waitUntil: "commit",
+            timeout: 60000,
+          });
+        };
+        await retryStagehand(exec);
         break;
-
-      case "ACT":
-        await page.act(instruction!);
-        break;
-
-      case "EXTRACT": {
-        const { extraction } = await page.extract(instruction!);
-        return extraction;
       }
 
-      case "OBSERVE":
-        return await page.observe(instruction!);
+      case "ACT": {
+        const exec = async () => {
+          await page.act(instruction!);
+        };
+        await retryStagehand(exec);
+        break;
+      }
+
+      case "EXTRACT": {
+        const exec = async () => {
+          const { extraction } = await page.extract(instruction!);
+          return extraction;
+        };
+        return await retryStagehand(exec);
+      }
+
+      case "OBSERVE": {
+        const exec = async () => page.observe(instruction!);
+        return await retryStagehand(exec);
+      }
 
       case "CLOSE":
         await stagehand.close();
@@ -196,7 +213,11 @@ async function sendPrompt({
       browserbaseSessionID: sessionID,
       env: "BROWSERBASE",
       disablePino: true,
-      modelName: "claude-3.5-sonnet",
+      useAPI: false,
+      modelName: "claude-3.5-haiku",
+      modelClientOptions: {
+        apiKey: process.env.ANTHROPIC_API_KEY || "",
+      },
       verbose: 1,
     });
     
@@ -475,5 +496,31 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+async function retryStagehand<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = err?.message || "";
+      if (
+        attempt < maxRetries &&
+        (msg.includes("Failed to parse server response") ||
+          msg.includes("browser context is undefined") ||
+          msg.includes("Target page") ||
+          err?.name === "StagehandResponseParseError")
+      ) {
+        attempt++;
+        const wait = 2000 * attempt;
+        console.warn(`Stagehand transient error, retrying in ${wait}ms... (attempt ${attempt}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      throw err;
+    }
   }
 }

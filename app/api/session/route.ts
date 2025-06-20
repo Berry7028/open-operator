@@ -98,12 +98,57 @@ async function createSession(timezone?: string, contextId?: string) {
 
   console.log("timezone ", timezone);
   console.log("getClosestRegion(timezone)", getClosestRegion(timezone));
-  const session = await bb.sessions.create({
-    projectId: process.env.BROWSERBASE_PROJECT_ID!,
-    browserSettings,
-    keepAlive: true,
-    region: getClosestRegion(timezone),
-  });
+  let session;
+  try {
+    session = await bb.sessions.create({
+      projectId: process.env.BROWSERBASE_PROJECT_ID!,
+      browserSettings,
+      keepAlive: true,
+      region: getClosestRegion(timezone),
+    });
+  } catch (error: any) {
+    // If we've hit the concurrency limit (HTTP 429), try to reuse an existing RUNNING session
+    if (error?.status === 429) {
+      console.warn("[warn] Concurrency limit reached. Attempting to reuse an existing RUNNING session...");
+      try {
+        // Fetch currently running sessions for the project
+        // The Node SDK exposes `.list` – if the typings change we fall back to the raw fetch call
+        let runningSessions: any[] = [];
+        if (typeof (bb.sessions as any).list === "function") {
+          runningSessions = await (bb.sessions as any).list({
+            projectId: process.env.BROWSERBASE_PROJECT_ID!,
+            status: "RUNNING",
+          });
+        } else {
+          const response = await fetch("https://api.browserbase.com/v1/sessions?status=RUNNING", {
+            headers: {
+              "x-bb-api-key": process.env.BROWSERBASE_API_KEY!,
+            },
+          });
+          if (response.ok) {
+            runningSessions = await response.json();
+          }
+        }
+
+        if (runningSessions.length > 0) {
+          session = runningSessions[0];
+          console.log(`[log] Reusing session ${session.id}`);
+        } else {
+          console.error("[error] No RUNNING sessions available to reuse.");
+          throw error; // rethrow to be handled by caller
+        }
+      } catch (reuseErr) {
+        console.error("[error] Failed to reuse existing session", reuseErr);
+        throw error; // propagate original 429
+      }
+    } else {
+      throw error; // propagate non-rate-limit errors
+    }
+  }
+  
+  if (!session) {
+    throw new Error("Unable to acquire a Browserbase session");
+  }
   
   // Wait for session to be ready
   console.log("Waiting for session to be ready...");

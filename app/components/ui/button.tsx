@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/40 hover:scale-[1.02]",
+        default: "bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 shadow-lg shadow-gray-500/25 hover:shadow-xl hover:shadow-gray-500/40 hover:scale-[1.02]",
         destructive:
           "bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700 shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/40",
         outline:
@@ -16,13 +16,13 @@ const buttonVariants = cva(
         secondary:
           "bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 shadow-md hover:shadow-lg border border-white/10 hover:border-white/20",
         ghost: "text-white hover:bg-white/10 hover:scale-[1.02]",
-        link: "text-violet-400 underline-offset-4 hover:underline hover:text-violet-300",
+        link: "text-gray-400 underline-offset-4 hover:underline hover:text-gray-300",
         github: "bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-700 hover:to-gray-800 border border-gray-700 shadow-lg hover:shadow-xl",
-        glow: "bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 text-white hover:shadow-[0_0_40px_rgba(139,92,246,0.6)] shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:scale-[1.05]",
-        soft: "bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 border border-violet-500/20 hover:border-violet-500/40 backdrop-blur-xl",
+        glow: "bg-gradient-to-r from-gray-500 via-gray-600 to-slate-600 text-white hover:shadow-[0_0_40px_rgba(107,114,128,0.6)] shadow-[0_0_20px_rgba(107,114,128,0.4)] hover:scale-[1.05]",
+        soft: "bg-gray-500/10 text-gray-300 hover:bg-gray-500/20 border border-gray-500/20 hover:border-gray-500/40 backdrop-blur-xl",
         glass: "bg-white/5 backdrop-blur-xl border border-white/10 text-white hover:bg-white/10 hover:border-white/20 shadow-lg hover:shadow-xl",
         success: "bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25",
-        warning: "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/25",
+        warning: "bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 shadow-lg shadow-gray-500/25",
       },
       size: {
         default: "h-10 px-5 py-2",

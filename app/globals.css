@@ -17,14 +17,14 @@
 }
 
 :root {
-  /* Modern dark theme with violet/purple accents */
+  /* Modern dark theme with gray accents */
   --background: #0f0f23;
   --foreground: #ffffff;
   --card: #1a1a2e;
   --card-foreground: #ffffff;
   --popover: #1a1a2e;
   --popover-foreground: #ffffff;
-  --primary: #8b5cf6; /* Violet-500 */
+  --primary: #6b7280; /* Gray-500 */
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.1);
   --secondary-foreground: #ffffff;
@@ -36,12 +36,12 @@
   --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.05);
-  --ring: #8b5cf6;
-  --chart-1: #8b5cf6;
-  --chart-2: #a78bfa;
-  --chart-3: #c4b5fd;
-  --chart-4: #ddd6fe;
-  --chart-5: #ede9fe;
+  --ring: #6b7280;
+  --chart-1: #6b7280;
+  --chart-2: #9ca3af;
+  --chart-3: #d1d5db;
+  --chart-4: #e5e7eb;
+  --chart-5: #f3f4f6;
   --radius: 0.75rem;
 }
 
@@ -133,10 +133,10 @@ body {
 
 @keyframes glow-pulse {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 0 20px rgba(107, 114, 128, 0.3);
   }
   50% {
-    box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+    box-shadow: 0 0 40px rgba(107, 114, 128, 0.6);
   }
 }
 
@@ -200,7 +200,7 @@ body {
   background: rgba(15, 15, 35, 0.8);
   backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 8px 32px rgba(107, 114, 128, 0.1);
 }
 
 .glass-card {
@@ -234,7 +234,7 @@ body {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+  background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -249,7 +249,7 @@ body {
 
 /* Focus styles */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-gray-900;
+  @apply focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900;
 }
 
 /* Button variants */
@@ -290,7 +290,7 @@ input:focus::placeholder {
 }
 
 .message-user {
-  background: #f97316;
+  background: #6b7280;
   color: white;
   margin-left: auto;
   border-radius: 18px 18px 4px 18px;
@@ -332,17 +332,17 @@ input:focus::placeholder {
 
 .sidebar-item.active {
   background-color: #2a2a2a;
-  border-right: 2px solid #f97316;
+  border-right: 2px solid #6b7280;
 }
 
 /* Better focus indicators */
 *:focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid #6b7280;
   outline-offset: 2px;
 }
 
 button:focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid #6b7280;
   outline-offset: 2px;
 }
 
