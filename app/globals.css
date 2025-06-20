@@ -17,32 +17,32 @@
 }
 
 :root {
-  /* Dark theme colors similar to ChatGPT */
-  --background: #0a0a0a;
+  /* Modern dark theme with violet/purple accents */
+  --background: #0f0f23;
   --foreground: #ffffff;
-  --card: #171717;
+  --card: #1a1a2e;
   --card-foreground: #ffffff;
-  --popover: #171717;
+  --popover: #1a1a2e;
   --popover-foreground: #ffffff;
-  --primary: #f97316; /* Orange-500 */
+  --primary: #8b5cf6; /* Violet-500 */
   --primary-foreground: #ffffff;
-  --secondary: #2a2a2a;
+  --secondary: rgba(255, 255, 255, 0.1);
   --secondary-foreground: #ffffff;
-  --muted: #3a3a3a;
+  --muted: rgba(255, 255, 255, 0.15);
   --muted-foreground: #a1a1aa;
-  --accent: #2a2a2a;
+  --accent: rgba(255, 255, 255, 0.1);
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #2a2a2a;
-  --input: #2a2a2a;
-  --ring: #f97316;
-  --chart-1: #f97316;
-  --chart-2: #fb923c;
-  --chart-3: #fdba74;
-  --chart-4: #fed7aa;
-  --chart-5: #fff7ed;
-  --radius: 0.5rem;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.05);
+  --ring: #8b5cf6;
+  --chart-1: #8b5cf6;
+  --chart-2: #a78bfa;
+  --chart-3: #c4b5fd;
+  --chart-4: #ddd6fe;
+  --chart-5: #ede9fe;
+  --radius: 0.75rem;
 }
 
 * {
@@ -95,7 +95,7 @@ body {
   background: #4a4a4a;
 }
 
-/* Animations */
+/* Modern animations */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -122,6 +122,46 @@ body {
   50% { transform: translateY(-10px); }
 }
 
+@keyframes aurora {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+  }
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .animate-shimmer {
   animation: shimmer 2s infinite linear;
 }
@@ -138,16 +178,47 @@ body {
   animation: float 6s ease-in-out infinite;
 }
 
-/* Glass effects */
+.animate-aurora {
+  animation: aurora 20s ease infinite;
+  background-size: 200% 200%;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.5s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out;
+}
+
+/* Modern glass effects */
 .glass-dark {
-  background: rgba(23, 23, 23, 0.8);
+  background: rgba(15, 15, 35, 0.8);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.1);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-navbar {
+  background: rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.glass-card {
-  background: rgba(42, 42, 42, 0.6);
-  backdrop-filter: blur(12px);
+.glass-sidebar {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 

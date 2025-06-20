@@ -104,6 +104,35 @@ async function createSession(timezone?: string, contextId?: string) {
     keepAlive: true,
     region: getClosestRegion(timezone),
   });
+  
+  // Wait for session to be ready
+  console.log("Waiting for session to be ready...");
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    try {
+      const sessionStatus = await bb.sessions.retrieve(session.id);
+      console.log(`Session status check ${attempts + 1}: ${sessionStatus.status}`);
+      
+      if (sessionStatus.status === 'RUNNING') {
+        console.log("Session is ready!");
+        break;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      attempts++;
+    } catch (error) {
+      console.error("Error checking session status:", error);
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  
+  if (attempts >= maxAttempts) {
+    console.warn("Session status check timed out, proceeding anyway");
+  }
+  
   return {
     session,
     contextId: browserSettings.context?.id,

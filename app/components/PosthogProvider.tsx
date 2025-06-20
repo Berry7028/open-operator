@@ -2,10 +2,14 @@
 
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+
   useEffect(() => {
+    setIsClient(true);
+    
     try {
       if (
         typeof window === "undefined" ||
@@ -21,6 +25,11 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       console.error(e);
     }
   }, []);
+
+  // Return children directly during SSR, only wrap with PHProvider on client
+  if (!isClient) {
+    return <>{children}</>;
+  }
 
   return <PHProvider client={posthog}>{children}</PHProvider>;
 }

@@ -43,14 +43,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ja">
+    <html lang="ja" className="dark" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         {/* Fallback for browsers that don't support SVG favicons */}
         <link rel="alternate icon" href="/favicon.ico" />
       </head>
       <body
-        className={`${inter.variable} ${ppNeue.variable} ${ppSupply.variable} font-sans antialiased bg-white text-gray-900`}
+        className={`${inter.variable} ${ppNeue.variable} ${ppSupply.variable} font-sans antialiased bg-background text-foreground`}
+        suppressHydrationWarning
       >
         <PostHogProvider>{children}</PostHogProvider>
         <Analytics />

@@ -33,14 +33,83 @@ async function runStagehand({
   const stagehand = new Stagehand({
     browserbaseSessionID: sessionID,
     env: "BROWSERBASE",
-    modelName: "google/gemini-2.0-flash",
+    modelName: "claude-3.5-sonnet",
     disablePino: true,
+    verbose: 1, // Enable more verbose logging
   });
-  await stagehand.init();
-
-  const page = stagehand.page;
-
+  
   try {
+    // Add retry logic for initialization with exponential backoff
+    let initAttempts = 0;
+    const maxAttempts = 3;
+    let lastError: Error | null = null;
+    
+    while (initAttempts < maxAttempts) {
+      try {
+        console.log(`[log] Attempting Stagehand initialization (attempt ${initAttempts + 1}/${maxAttempts})`);
+        await stagehand.init();
+        
+        // Additional wait for browser context to be fully ready
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // More thorough validation of browser context
+        console.log(`[log] Validating browser context...`);
+        console.log(`[log] stagehand.page exists: ${!!stagehand.page}`);
+        
+        if (stagehand.page) {
+          try {
+            console.log(`[log] Testing page context...`);
+            const context = stagehand.page.context();
+            console.log(`[log] Page context exists: ${!!context}`);
+            
+            // Test if we can get browser info
+            const browser = context.browser();
+            console.log(`[log] Browser exists: ${!!browser}`);
+            
+            // Test basic page functionality
+            const isConnected = stagehand.page.isClosed();
+            console.log(`[log] Page is closed: ${isConnected}`);
+            
+            if (isConnected) {
+              throw new Error("Page is already closed");
+            }
+            
+          } catch (pageError) {
+            console.error(`[log] Page validation failed:`, pageError);
+            throw new Error(`Page context validation failed: ${pageError instanceof Error ? pageError.message : String(pageError)}`);
+          }
+        }
+        
+        // Check if browser context is properly initialized
+        if (!stagehand.page) {
+          throw new Error("Failed to initialize Stagehand page. Browser context is undefined.");
+        }
+        
+        console.log(`[log] Stagehand initialization successful on attempt ${initAttempts + 1}`);
+        break; // Success, exit retry loop
+        
+      } catch (error) {
+        lastError = error as Error;
+        initAttempts++;
+        console.log(`[log] Initialization attempt ${initAttempts} failed:`, error);
+        
+        if (initAttempts < maxAttempts) {
+          // Exponential backoff: wait 3s, then 6s
+          const waitTime = 3000 * initAttempts;
+          console.log(`[log] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    // If all attempts failed, throw the last error
+    if (initAttempts >= maxAttempts) {
+      console.error(`[log] Failed to initialize Stagehand after ${maxAttempts} attempts`);
+      throw lastError || new Error("Failed to initialize Stagehand after multiple attempts");
+    }
+
+    const page = stagehand.page;
+
     switch (method) {
       case "GOTO":
         await page.goto(instruction!, {
@@ -63,12 +132,17 @@ async function runStagehand({
 
       case "CLOSE":
         await stagehand.close();
-        break;
+        return;
 
       case "SCREENSHOT": {
-        const cdpSession = await page.context().newCDPSession(page);
-        const { data } = await cdpSession.send("Page.captureScreenshot");
-        return data;
+        try {
+          const cdpSession = await page.context().newCDPSession(page);
+          const { data } = await cdpSession.send("Page.captureScreenshot");
+          return data;
+        } catch (screenshotError) {
+          console.error("Error taking screenshot:", screenshotError);
+          throw new Error(`Failed to take screenshot: ${screenshotError instanceof Error ? screenshotError.message : String(screenshotError)}`);
+        }
       }
 
       case "WAIT":
@@ -80,10 +154,27 @@ async function runStagehand({
       case "NAVBACK":
         await page.goBack();
         break;
+
+      default:
+        throw new Error(`Unknown method: ${method}`);
     }
   } catch (error) {
-    await stagehand.close();
+    console.error(`Error in runStagehand (${method}):`, error);
+    try {
+      await stagehand.close();
+    } catch (closeError) {
+      console.error("Error closing stagehand:", closeError);
+    }
     throw error;
+  } finally {
+    // For methods other than CLOSE, ensure proper cleanup
+    if (method !== "CLOSE") {
+      try {
+        await stagehand.close();
+      } catch (closeError) {
+        console.error("Error in final cleanup:", closeError);
+      }
+    }
   }
 }
 
@@ -105,11 +196,37 @@ async function sendPrompt({
       browserbaseSessionID: sessionID,
       env: "BROWSERBASE",
       disablePino: true,
-      modelName: "google/gemini-2.0-flash",
+      modelName: "claude-3.5-sonnet",
+      verbose: 1,
     });
-    await stagehand.init();
-    currentUrl = await stagehand.page.url();
-    await stagehand.close();
+    
+    // Add retry logic for initialization
+    let initAttempts = 0;
+    const maxAttempts = 3;
+    
+    while (initAttempts < maxAttempts) {
+      try {
+        await stagehand.init();
+        
+        // Additional wait for browser context
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        if (!stagehand.page) {
+          throw new Error("Failed to initialize Stagehand page. Browser context is undefined.");
+        }
+        
+        currentUrl = await stagehand.page.url();
+        await stagehand.close();
+        break; // Success
+        
+      } catch (error) {
+        initAttempts++;
+        if (initAttempts >= maxAttempts) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000 * initAttempts));
+      }
+    }
   } catch (error) {
     console.error("Error getting page info:", error);
   }
@@ -238,8 +355,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let body: any;
   try {
-    const body = await request.json();
+    body = await request.json();
     const { goal, sessionId, previousSteps = [], action } = body;
 
     if (!sessionId) {
@@ -336,8 +454,25 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Error in agent endpoint:", error);
+    
+    // Provide more specific error information
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("Error details:", {
+      message: errorMessage,
+      stack: errorStack,
+      sessionId: body.sessionId,
+      action: body.action,
+      timestamp: new Date().toISOString()
+    });
+    
     return NextResponse.json(
-      { success: false, error: "Failed to process request" },
+      { 
+        success: false, 
+        error: "Failed to process request",
+        details: errorMessage
+      },
       { status: 500 }
     );
   }

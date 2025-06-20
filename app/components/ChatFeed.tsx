@@ -11,7 +11,23 @@ import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
-import { Loader2, X, Globe, Check, AlertCircle, Navigation, FileText, Eye, Brain, Sparkles, ExternalLink, Send, User, Bot, Plus } from "lucide-react";
+import { 
+  Loader2, 
+  X, 
+  Globe, 
+  Check, 
+  AlertCircle, 
+  Navigation, 
+  FileText, 
+  Eye, 
+  Brain, 
+  Sparkles, 
+  ExternalLink, 
+  Send, 
+  User, 
+  Bot, 
+  Plus 
+} from "./icons";
 
 interface ChatFeedProps {
   initialMessage?: string;
@@ -186,6 +202,10 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             ),
             steps: [],
           });
+
+          // Wait for browser session to be fully ready
+          console.log("Waiting for browser session to initialize...");
+          await new Promise(resolve => setTimeout(resolve, 10000));
 
           const response = await fetch("/api/agent", {
             method: "POST",
@@ -453,40 +473,106 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     handleSendMessage(inputValue);
   };
 
+  // AI状態の計算
+  const getAIStatus = () => {
+    if (isAgentFinished) return 'completed';
+    if (isLoading || uiState.steps.length > 0) return 'working';
+    return 'idle';
+  };
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'working':
+        return {
+          gradient: 'from-emerald-400 via-green-500 to-teal-600',
+          icon: Brain,
+          pulse: true,
+          text: 'AI 実行中',
+          description: 'タスクを処理しています'
+        };
+      case 'completed':
+        return {
+          gradient: 'from-blue-400 via-cyan-500 to-indigo-600',
+          icon: Check,
+          pulse: false,
+          text: 'AI 完了',
+          description: 'タスクが完了しました'
+        };
+      case 'idle':
+      default:
+        return {
+          gradient: 'from-slate-400 via-gray-500 to-zinc-600',
+          icon: Bot,
+          pulse: false,
+          text: 'AI 待機中',
+          description: 'タスクをお待ちしています'
+        };
+    }
+  };
+
+  const currentStatus = getAIStatus();
+  const statusConfig = getStatusConfig(currentStatus);
+
   return (
     <motion.div
-      className="min-h-screen bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden"
+      className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/20 to-slate-950 text-white flex flex-col relative overflow-hidden"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
       exit="exit"
     >
       <motion.nav
-        className="relative z-50 flex justify-between items-center px-6 py-4 border-b border-[#2a2a2a] bg-[#171717]"
+        className="relative z-50 flex justify-between items-center px-6 py-4 border-b border-white/10 bg-white/[0.02] backdrop-blur-xl"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <motion.div
             initial={{ rotate: -180, opacity: 0, scale: 0.5 }}
             animate={{ rotate: 0, opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, type: "spring" }}
             className="relative"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center">
-              <Image
-                src="/favicon.svg"
-                alt="オープンオペレーター"
-                className="w-6 h-6"
-                width={24}
-                height={24}
-              />
+            <div className={`w-12 h-12 bg-gradient-to-br ${statusConfig.gradient} rounded-full flex items-center justify-center shadow-lg relative ${
+              statusConfig.pulse ? 'animate-pulse' : ''
+            }`}>
+              {/* 外側のリング効果 */}
+              {statusConfig.pulse && (
+                <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${statusConfig.gradient} opacity-30 animate-ping`} />
+              )}
+              
+              {/* アイコン */}
+              <statusConfig.icon className="w-6 h-6 text-white relative z-10" />
+              
+              {/* ステータスドット */}
+              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#171717] ${
+                currentStatus === 'working' 
+                  ? 'bg-green-400 animate-pulse' 
+                  : currentStatus === 'completed'
+                  ? 'bg-blue-400'
+                  : 'bg-gray-400'
+              }`} />
             </div>
           </motion.div>
+          
           <div>
-            <h1 className="font-semibold text-white text-lg">オープンオペレーター</h1>
-            <p className="text-xs text-gray-400">AI セッション実行中</p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-semibold text-white text-lg">オープンオペレーター</h1>
+              <Badge 
+                variant="secondary" 
+                className={`text-xs px-2 py-1 ${
+                  currentStatus === 'working' 
+                    ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                    : currentStatus === 'completed'
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                }`}
+              >
+                {statusConfig.text}
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">{statusConfig.description}</p>
           </div>
         </div>
         <Button
@@ -504,7 +590,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
       
       <main className="flex-1 flex relative z-10">
         {/* Left Chat Panel */}
-        <div className="w-1/2 flex flex-col border-r border-[#2a2a2a] bg-[#0a0a0a]">
+        <div className="w-1/2 flex flex-col border-r border-white/10 bg-white/[0.01] backdrop-blur-xl">
           {/* Chat Messages */}
           <div 
             ref={chatContainerRef}
@@ -526,8 +612,8 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   {/* Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     message.type === 'user' 
-                      ? 'bg-orange-500' 
-                      : 'bg-[#2a2a2a]'
+                      ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25' 
+                      : 'bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg'
                   }`}>
                     {message.type === 'user' ? (
                       <User className="w-4 h-4 text-white" />
@@ -537,10 +623,10 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   </div>
                   
                   {/* Message Content */}
-                  <div className={`rounded-2xl px-4 py-3 ${
+                  <div className={`rounded-2xl px-4 py-3 backdrop-blur-xl ${
                     message.type === 'user'
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-[#2a2a2a] text-white'
+                      ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25'
+                      : 'bg-white/10 text-white border border-white/20 shadow-lg'
                   }`}>
                     <p className="text-sm leading-relaxed">{message.content}</p>
                     <p className="text-xs opacity-70 mt-1">
@@ -574,19 +660,19 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
           </div>
 
           {/* Input Area */}
-          <div className="p-6 border-t border-[#2a2a2a]">
+          <div className="p-6 border-t border-white/10 bg-white/[0.02] backdrop-blur-xl">
             <form onSubmit={handleSubmit} className="flex gap-3">
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="追加のリクエストを入力..."
                 disabled={isLoading}
-                className="flex-1 bg-[#2a2a2a] border-[#3a3a3a] focus:border-orange-500 text-white placeholder:text-gray-500"
+                className="flex-1 bg-white/5 backdrop-blur-xl border border-white/20 focus:border-violet-500/50 text-white placeholder:text-gray-400 rounded-xl"
               />
               <Button
                 type="submit"
                 disabled={!inputValue.trim() || isLoading}
-                className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:opacity-50"
+                variant="default"
               >
                 <Send className="w-4 h-4" />
               </Button>
@@ -595,43 +681,63 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
         </div>
 
         {/* Right Browser Panel */}
-        <div className="w-1/2 flex flex-col bg-[#0a0a0a]">
+        <div className="w-1/2 flex flex-col bg-white/[0.01] backdrop-blur-xl">
           {/* Browser Header */}
-          <div className="p-4 border-b border-[#2a2a2a]">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-4 h-4 text-orange-500" />
-              <h2 className="text-sm font-semibold text-white">ブラウザビュー</h2>
-            </div>
-            {uiState.sessionUrl && (
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span>セッションアクティブ</span>
+          <div className="p-6 border-b border-white/10 bg-gradient-to-r from-white/[0.02] to-white/[0.05] backdrop-blur-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center border border-blue-500/30">
+                  <Globe className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-white">ブラウザビュー</h2>
+                  <p className="text-xs text-gray-400">リアルタイム実行環境</p>
+                </div>
               </div>
-            )}
+              {uiState.sessionUrl && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="text-xs text-green-400 font-medium">セッションアクティブ</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Browser Content */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 p-6">
             {uiState.sessionUrl && !isAgentFinished ? (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.4, type: "spring", damping: 15 }}
                 className="h-full"
               >
-                <div className="rounded-lg overflow-hidden shadow-2xl border border-[#2a2a2a] h-full">
-                  <div className="bg-[#171717] border-b border-[#2a2a2a] px-4 py-2 flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                      <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                      <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                <div className="rounded-xl overflow-hidden shadow-2xl border border-[#2a2a2a] h-full bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f]">
+                  {/* ブラウザ風のタブバー */}
+                  <div className="bg-gradient-to-r from-[#171717] to-[#1a1a1a] border-b border-[#2a2a2a] px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50" />
+                          <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-lg shadow-yellow-500/50" />
+                          <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />
+                        </div>
+                        <div className="h-4 w-px bg-[#3a3a3a]" />
+                        <div className="bg-[#2a2a2a] rounded-lg px-3 py-1 flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                          <span className="text-xs text-gray-300 font-mono">browser.session</span>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0 hover:bg-[#3a3a3a]"
+                      >
+                        <ExternalLink className="w-3 h-3 text-gray-400" />
+                      </Button>
                     </div>
-                    <div className="flex-1 flex items-center justify-center">
-                      <span className="text-xs text-gray-400 font-mono">browser.session</span>
-                    </div>
-                    <ExternalLink className="w-3 h-3 text-gray-400" />
                   </div>
-                  <div className="h-[calc(100%-40px)] bg-black">
+                  <div className="h-[calc(100%-52px)] bg-black relative">
                     <iframe
                       src={uiState.sessionUrl}
                       className="w-full h-full"
@@ -640,46 +746,71 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                       referrerPolicy="no-referrer"
                       title="Browser Session"
                     />
+                    {/* オーバーレイ効果 */}
+                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/10 via-transparent to-black/5" />
                   </div>
                 </div>
               </motion.div>
             ) : isAgentFinished ? (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", damping: 15 }}
                 className="h-full flex items-center justify-center"
               >
-                <Card className="bg-[#171717] border-[#2a2a2a] max-w-md w-full">
+                <Card className="bg-gradient-to-br from-[#171717] to-[#1a1a1a] border-[#2a2a2a] shadow-2xl max-w-md w-full">
                   <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Check className="w-8 h-8 text-green-500" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.2, type: "spring", damping: 10 }}
+                      className="w-20 h-20 bg-gradient-to-br from-emerald-500/30 to-green-600/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/20"
+                    >
+                      <Check className="w-10 h-10 text-green-400" />
+                    </motion.div>
+                    <h3 className="text-xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                       セッション完了
                     </h3>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 text-sm leading-relaxed">
                       すべてのタスクが正常に実行されました
                     </p>
+                    <div className="mt-6 flex items-center justify-center gap-2 text-xs text-green-400">
+                      <div className="w-2 h-2 bg-green-400 rounded-full" />
+                      <span>タスク完了</span>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
             ) : (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", damping: 15 }}
                 className="h-full flex items-center justify-center"
               >
-                <Card className="bg-[#171717] border-[#2a2a2a] max-w-md w-full">
+                <Card className="bg-gradient-to-br from-[#171717] to-[#1a1a1a] border-[#2a2a2a] shadow-2xl max-w-md w-full">
                   <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Brain className="w-8 h-8 text-orange-500" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.2, type: "spring", damping: 10 }}
+                      className="w-20 h-20 bg-gradient-to-br from-blue-500/30 to-cyan-600/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-blue-500/20"
+                    >
+                      <Brain className="w-10 h-10 text-blue-400" />
+                    </motion.div>
+                    <h3 className="text-xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                       セッション準備中
                     </h3>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 text-sm leading-relaxed mb-4">
                       ブラウザセッションを初期化しています...
                     </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -688,34 +819,56 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
 
           {/* Steps Summary */}
           {uiState.steps.length > 0 && (
-            <div className="p-4 border-t border-[#2a2a2a] bg-[#171717]/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-orange-500" />
-                  <span className="text-sm font-medium text-white">実行ステップ</span>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="p-6 border-t border-[#2a2a2a] bg-gradient-to-r from-[#171717]/50 to-[#1a1a1a]/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center border border-purple-500/30">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-white">実行ステップ</span>
+                    <p className="text-xs text-gray-400">AI実行履歴</p>
+                  </div>
                 </div>
-                <Badge variant="secondary" className="text-xs">
+                <Badge 
+                  variant="secondary" 
+                  className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/30 px-3 py-1"
+                >
                   {uiState.steps.length} steps
                 </Badge>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {uiState.steps.slice(-5).map((step, index) => (
-                  <Badge 
+              <div className="flex flex-wrap gap-2">
+                {uiState.steps.slice(-6).map((step, index) => (
+                  <motion.div
                     key={index}
-                    variant={getToolVariant(step.tool) as any}
-                    className="text-xs gap-1"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
                   >
-                    {getToolIcon(step.tool)}
-                    {step.tool}
-                  </Badge>
+                    <Badge 
+                      variant={getToolVariant(step.tool) as any}
+                      className={`text-xs gap-2 px-3 py-1.5 bg-gradient-to-r ${getToolColor(step.tool)} border border-current/20 backdrop-blur-sm hover:scale-105 transition-transform`}
+                    >
+                      {getToolIcon(step.tool)}
+                      <span className="font-medium">{step.tool}</span>
+                    </Badge>
+                  </motion.div>
                 ))}
-                {uiState.steps.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{uiState.steps.length - 5}
+                {uiState.steps.length > 6 && (
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs bg-gray-500/10 text-gray-400 border-gray-500/30 px-3 py-1.5"
+                  >
+                    +{uiState.steps.length - 6} more
                   </Badge>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
       </main>
