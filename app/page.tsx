@@ -151,283 +151,201 @@ export default function Home() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen relative overflow-hidden bg-[#222831]">
-        <div className="relative z-10 h-full text-[#EEEEEE] flex overflow-hidden">
-          {/* Sidebar */}
-          <motion.aside
-            initial={false}
-            animate={{ width: isSidebarOpen ? 280 : 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="relative flex-shrink-0 overflow-hidden"
-          >
-            <div className="flex flex-col h-full w-[280px] bg-[#393E46] border-r border-[#495057]">
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-[#495057]">
-                <Button
-                  onClick={startNewChat}
-                  variant="ghost"
-                  className="flex items-center gap-3 text-[#EEEEEE] hover:bg-[#495057] flex-1 justify-start bg-[#393E46] border border-[#495057] rounded-lg h-11 transition-all duration-200"
-                >
-                  <div className="w-5 h-5 rounded bg-[#00ADB5] flex items-center justify-center">
-                    <PenSquare className="w-3 h-3 text-[#222831]" />
-                  </div>
-                  新しいチャット
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="text-[#EEEEEE] hover:bg-[#495057] md:hidden ml-2 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
+      <div className="chat-container h-screen flex">
+        {/* Sidebar */}
+        <motion.aside
+          initial={false}
+          animate={{ width: isSidebarOpen ? 280 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="chat-sidebar flex-shrink-0 overflow-hidden"
+        >
+          <div className="flex flex-col h-full w-[280px]">
+            {/* Header */}
+            <div className="p-4 border-b border-[#525252]">
+              <Button
+                onClick={startNewChat}
+                className="sidebar-new-chat w-full flex items-center gap-3 justify-start"
+              >
+                <Plus className="w-4 h-4" />
+                新しいチャット
+              </Button>
+            </div>
 
-              {/* Chat History */}
-              <div className="flex-1 overflow-y-auto p-3">
-                <div className="space-y-2">
-                  {isLoadingHistory ? (
-                    <>
-                      {[...Array(5)].map((_, i) => (
-                        <motion.div 
-                          key={i} 
-                          className="h-14 bg-[#495057] rounded-lg animate-pulse"
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.1 }}
-                        />
-                      ))}
-                    </>
-                  ) : chatHistory.length > 0 ? (
-                    chatHistory.map((session, index) => (
-                      <motion.div
-                        key={session.id}
+            {/* Chat History */}
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="space-y-2">
+                {isLoadingHistory ? (
+                  <>
+                    {[...Array(5)].map((_, i) => (
+                      <motion.div 
+                        key={i} 
+                        className="h-12 bg-[#525252] rounded-lg animate-pulse"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="group relative"
-                      >
-                        <Button
-                          variant="ghost"
-                          className={`w-full justify-start text-left p-4 h-auto hover:bg-[#495057] transition-all duration-200 rounded-lg ${
-                            selectedSessionId === session.id 
-                              ? 'bg-[#495057] border border-[#6C757D]' 
-                              : 'border border-transparent hover:border-[#6C757D]'
-                          }`}
-                          onClick={() => loadSession(session)}
-                        >
-                          <div className="flex items-start gap-3 w-full min-w-0">
-                            <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                              session.status === 'completed' 
-                                ? 'bg-[#00ADB5]' 
-                                : session.status === 'in-progress'
-                                ? 'bg-[#CED4DA]'
-                                : 'bg-[#ef4444]'
-                            }`}>
-                              <MessageSquare className={`w-4 h-4 ${
-                                session.status === 'completed' ? 'text-[#222831]' : 'text-[#EEEEEE]'
-                              }`} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-[#EEEEEE] truncate leading-snug">
-                                {session.title}
-                              </p>
-                              <p className="text-xs text-[#CED4DA] truncate mt-1">
-                                {getTimeAgo(session.timestamp)}
-                              </p>
-                            </div>
-                          </div>
-                        </Button>
+                        transition={{ delay: i * 0.1 }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  chatHistory.map((session) => (
+                    <motion.div
+                      key={session.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={`sidebar-chat-item cursor-pointer group relative ${selectedSessionId === session.id ? 'active' : ''}`}
+                      onClick={() => loadSession(session)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {session.title}
+                          </p>
+                          <p className="text-xs opacity-70 mt-1">
+                            {getTimeAgo(session.timestamp)}
+                          </p>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-7 w-7 text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] border border-transparent rounded transition-all duration-200"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 text-gray-400 hover:text-red-400"
                           onClick={(e) => deleteSession(session.id, e)}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </Button>
-                      </motion.div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12 text-[#CED4DA]">
-                      <div className="w-12 h-12 rounded bg-[#495057] flex items-center justify-center mx-auto mb-3">
-                        <MessageSquare className="w-6 h-6 opacity-50" />
                       </div>
-                      <p className="text-sm">履歴がありません</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-[#495057] p-3">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] rounded-lg h-11 transition-all duration-200"
-                >
-                  <Settings className="w-5 h-5 mr-3" />
-                  設定
-                </Button>
-              </div>
-            </div>
-          </motion.aside>
-
-          {/* Main Content */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between p-4 border-b border-[#495057] bg-[#393E46]">
-              <div className="flex items-center gap-4">
-                {!isSidebarOpen && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="text-[#EEEEEE] hover:bg-[#495057] rounded-lg h-10 w-10 transition-all duration-200"
-                  >
-                    <Menu className="w-5 h-5" />
-                  </Button>
+                    </motion.div>
+                  ))
                 )}
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-[#00ADB5] flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-[#222831]" />
-                  </div>
-                  <h1 className="text-xl font-semibold">
-                    オープンオペレーター
-                  </h1>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] rounded-lg transition-all duration-200"
-                >
-                  <Brain className="w-4 h-4 mr-2" />
-                  API
-                </Button>
               </div>
             </div>
 
-            {/* Chat Area */}
-            <AnimatePresence mode="wait">
-              {!isChatVisible ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex-1 flex flex-col items-center justify-center p-8"
-                >
-                  <div className="max-w-3xl w-full space-y-10">
-                    {/* Welcome Message */}
-                    <div className="text-center space-y-6">
-                      <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="relative"
-                      >
-                        <div className="relative w-20 h-20 bg-[#00ADB5] rounded-2xl mx-auto mb-6 flex items-center justify-center">
-                          <Bot className="w-10 h-10 text-[#222831]" />
-                        </div>
-                      </motion.div>
-                      <motion.h2
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-4xl font-bold"
-                      >
-                        何をお手伝いしましょうか？
-                      </motion.h2>
-                      <motion.p
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-lg text-[#CED4DA] max-w-2xl mx-auto leading-relaxed"
-                      >
-                        AIエージェントがウェブを自動操作してタスクを実行します
-                      </motion.p>
-                    </div>
+            {/* Sidebar Toggle for mobile */}
+            <div className="p-3 border-t border-[#525252] md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen(false)}
+                className="w-full"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </motion.aside>
 
-                    {/* Input Form */}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col relative">
+          {/* Mobile header */}
+          <div className="md:hidden flex items-center p-4 border-b border-[#525252]">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSidebarOpen(true)}
+              className="mr-3"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+            <h1 className="text-lg font-semibold">オープンオペレーター</h1>
+          </div>
+
+          {/* Chat or Welcome */}
+          <div className="flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+              {isChatVisible ? (
+                <motion.div
+                  key="chat"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  className="h-full"
+                >
+                  <ChatFeed
+                    initialMessage={initialMessage}
+                    onClose={() => setIsChatVisible(false)}
+                    sessionId={selectedSessionId}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="welcome"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="welcome-container p-8"
+                >
+                  <div className="max-w-4xl mx-auto text-center">
+                    {/* Welcome content */}
                     <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.4 }}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1, duration: 0.6 }}
+                      className="mb-8"
                     >
-                      <form onSubmit={handleSubmit} className="relative">
-                        <div className="relative group">
+                      <h1 className="welcome-title">
+                        オープンオペレーター
+                      </h1>
+                      <p className="welcome-subtitle">
+                        AIがウェブを閲覧する様子を無料で見る
+                      </p>
+                    </motion.div>
+
+                    {/* Input form */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3, duration: 0.6 }}
+                      className="mb-8"
+                    >
+                      <form onSubmit={handleSubmit} className="flex items-center gap-3 max-w-2xl mx-auto">
+                        <div className="flex-1 relative">
                           <Input
+                            type="text"
+                            placeholder="AIに何をしてもらいたいですか？"
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            placeholder="メッセージを入力..."
-                            className="w-full h-16 pr-16 text-lg bg-[#393E46] border border-[#495057] focus:border-[#00ADB5] text-[#EEEEEE] placeholder:text-[#CED4DA] rounded-xl transition-all duration-200"
+                            className="welcome-input pr-12"
                           />
-                          <Button
-                            type="submit"
-                            disabled={!inputValue.trim()}
-                            size="icon"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 bg-[#00ADB5] hover:bg-[#009AA3] disabled:bg-[#6C757D] disabled:opacity-50 rounded-lg transition-all duration-200 text-[#222831]"
-                          >
-                            <Send className="w-5 h-5" />
-                          </Button>
                         </div>
+                        <Button
+                          type="submit"
+                          disabled={!inputValue.trim()}
+                          className="chat-send-button"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
                       </form>
                     </motion.div>
 
-                    {/* Quick Actions */}
+                    {/* Example prompts */}
                     <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.5 }}
-                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5, duration: 0.6 }}
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto"
                     >
                       {[
-                        {
-                          title: "GitHub分析",
-                          description: "リポジトリの貢献者を調査",
-                          query: "BrowserbaseのStagehandの最大のGitHubコントリビューターは誰？",
-                          icon: "🔍"
-                        },
-                        {
-                          title: "株価情報",
-                          description: "リアルタイム価格を取得",
-                          query: "NVIDIAの株価はいくら？",
-                          icon: "📈"
-                        },
-                        {
-                          title: "スポーツ統計",
-                          description: "チームの成績を確認",
-                          query: "49ersの勝利数は？",
-                          icon: "🏈"
-                        },
-                        {
-                          title: "選手データ",
-                          description: "パフォーマンス分析",
-                          query: "ステフィン・カリーのPPGは？",
-                          icon: "🏀"
-                        }
-                      ].map((item, index) => (
+                        "最新のニュースを調べて",
+                        "天気予報を確認して",
+                        "レシピを検索して",
+                        "株価をチェックして",
+                        "おすすめの映画を探して",
+                        "旅行先を調べて"
+                      ].map((example, index) => (
                         <motion.div
                           key={index}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.6 + index * 0.1 }}
+                          transition={{ delay: 0.6 + index * 0.1, duration: 0.4 }}
                         >
-                          <Card
-                            className="bg-[#393E46] border border-[#495057] hover:border-[#00ADB5] transition-all duration-200 cursor-pointer group hover-lift"
-                            onClick={() => startChat(item.query)}
+                          <Card 
+                            className="card-minimal cursor-pointer p-4 hover:scale-105 transition-transform"
+                            onClick={() => setInputValue(example)}
                           >
-                            <CardContent className="p-6">
-                              <div className="flex items-center gap-4">
-                                <div className="text-3xl">{item.icon}</div>
-                                <div className="flex-1">
-                                  <h3 className="font-semibold text-[#EEEEEE] text-lg">
-                                    {item.title}
-                                  </h3>
-                                  <p className="text-sm text-[#CED4DA] mt-1 leading-relaxed">{item.description}</p>
-                                </div>
-                                <Sparkles className="w-5 h-5 text-[#CED4DA] opacity-0 group-hover:opacity-100 transition-all duration-200" />
-                              </div>
+                            <CardContent className="p-0">
+                              <p className="text-sm">{example}</p>
                             </CardContent>
                           </Card>
                         </motion.div>
@@ -435,15 +353,6 @@ export default function Home() {
                     </motion.div>
                   </div>
                 </motion.div>
-              ) : (
-                <ChatFeed
-                  initialMessage={initialMessage}
-                  sessionId={selectedSessionId}
-                  onClose={() => {
-                    setIsChatVisible(false);
-                    fetchChatHistory();
-                  }}
-                />
               )}
             </AnimatePresence>
           </div>

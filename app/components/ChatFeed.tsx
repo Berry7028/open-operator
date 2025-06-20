@@ -133,7 +133,86 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     }
   }, []);
 
-  // スクリーンショット取得関数
+  // メッセージが更新されたら自動スクロール
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // データベース保存機能
+  const saveMessageToDb = useCallback(async (message: ChatMessage) => {
+    if (!sessionId || isHistorySession) return;
+    
+    try {
+      const response = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          type: message.type,
+          content: message.content,
+          metadata: {
+            timestamp: message.timestamp,
+            step: message.step,
+            isSearchResult: message.isSearchResult
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('メッセージ保存失敗:', await response.text());
+      }
+    } catch (error) {
+      console.error('メッセージ保存エラー:', error);
+    }
+  }, [sessionId, isHistorySession]);
+
+  const saveStepToDb = useCallback(async (step: BrowserStep, stepNumber: number) => {
+    if (!sessionId || isHistorySession) return;
+    
+    try {
+      const response = await fetch('/api/chat/steps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          stepNumber,
+          tool: step.tool,
+          instruction: step.instruction,
+          reasoning: step.reasoning,
+          text: step.text
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('ステップ保存失敗:', await response.text());
+      }
+    } catch (error) {
+      console.error('ステップ保存エラー:', error);
+    }
+  }, [sessionId, isHistorySession]);
+
+  const updateSessionStatus = useCallback(async (status: 'in-progress' | 'completed' | 'error', finalResult?: string) => {
+    if (!sessionId || isHistorySession) return;
+    
+    try {
+      const response = await fetch(`/api/chat-history?id=${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          finalResult
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('セッション更新失敗:', await response.text());
+      }
+    } catch (error) {
+      console.error('セッション更新エラー:', error);
+    }
+  }, [sessionId, isHistorySession]);
+
+  // スクリーンショット取得機能
   const takeScreenshot = useCallback(async () => {
     if (!uiState.sessionId) return;
     
@@ -156,13 +235,10 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     }
   }, [uiState.sessionId]);
 
-  // 2秒ごとのスクリーンショット取得
+  // スクリーンショット自動更新
   useEffect(() => {
     if (uiState.sessionId && !isAgentFinished) {
-      // 初回スクリーンショット
       takeScreenshot();
-      
-      // 2秒間隔でスクリーンショット取得
       screenshotIntervalRef.current = setInterval(takeScreenshot, 2000);
       
       return () => {
@@ -173,7 +249,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     }
   }, [uiState.sessionId, isAgentFinished, takeScreenshot]);
 
-  // ステップ追加時にチャットメッセージに表示
+  // ステップ追加時の処理
   const addStepMessage = useCallback((step: BrowserStep, stepNumber: number) => {
     const stepMessage: ChatMessage = {
       id: `step-${Date.now()}`,
@@ -184,437 +260,255 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     };
     
     setMessages(prev => [...prev, stepMessage]);
-  }, []);
-
-  // 検索結果メッセージ追加
-  const addSearchResult = useCallback((query: string, results: any) => {
-    const resultMessage: ChatMessage = {
-      id: `search-${Date.now()}`,
-      type: 'assistant',
-      content: `「${query}」の検索結果を取得しました。`,
-      timestamp: new Date(),
-      isSearchResult: true
-    };
     
-    setMessages(prev => [...prev, resultMessage]);
-  }, []);
+    // データベースに保存
+    saveStepToDb(step, stepNumber);
+    saveMessageToDb(stepMessage);
+  }, [saveStepToDb, saveMessageToDb]);
 
-  // 質問かどうかを判定する関数
-  const isQuestion = useCallback((text: string) => {
-    const questionPatterns = [
-      /[？?]$/,
-      /^(何|なに|どの|どこ|いつ|誰|どうして|なぜ|どのように|どうやって)/,
-      /について教えて/,
-      /を調べて/,
-      /はいくら/,
-      /の価格/,
-      /の値段/
-    ];
-    
-    return questionPatterns.some(pattern => pattern.test(text));
-  }, []);
-
-  useEffect(() => {
-    if (initialMessage && sessionId) {
-      // 過去のセッションを読み込む場合
-      loadHistorySession();
-    } else if (initialMessage) {
-      // 新しいセッションの場合
-      setMessages([{
-        id: Date.now().toString(),
-        type: 'user',
-        content: initialMessage,
-        timestamp: new Date()
-      }]);
-    }
-  }, [initialMessage, sessionId]);
-
-  const loadHistorySession = async () => {
+  // 履歴セッション読み込み
+  const loadHistorySession = useCallback(async () => {
     if (!sessionId) return;
     
-    setIsHistorySession(true);
     try {
       const response = await fetch(`/api/chat-history?id=${sessionId}`);
       if (response.ok) {
         const sessionData = await response.json();
         
-        // 保存されたメッセージがある場合はそれを読み込み
-        if (sessionData.messages && sessionData.messages.length > 0) {
-          setMessages(sessionData.messages);
-        } else {
-          // 旧形式の場合は基本メッセージのみ
-          setMessages([
-            {
-              id: '1',
-              type: 'user',
-              content: sessionData.message,
-              timestamp: new Date(sessionData.timestamp)
-            }
-          ]);
+        // メッセージを復元
+        if (sessionData.messages) {
+          const restoredMessages = sessionData.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.created_at || msg.timestamp)
+          }));
+          setMessages(restoredMessages);
         }
         
-        // ステップがある場合は設定
+        // ステップを復元
         if (sessionData.steps) {
-          setUiState(prev => ({ ...prev, steps: sessionData.steps }));
+          setUiState(prev => ({
+            ...prev,
+            steps: sessionData.steps
+          }));
         }
         
-        // 完了済みセッションの場合
+        setIsHistorySession(true);
+        
         if (sessionData.status === 'completed') {
           setIsAgentFinished(true);
         }
       }
     } catch (error) {
-      console.error('履歴セッション読み込みエラー:', error);
+      console.error('履歴読み込みエラー:', error);
     }
-  };
+  }, [sessionId]);
 
-  useEffect(() => {
-    if (
-      uiState.steps.length > 0 &&
-      uiState.steps[uiState.steps.length - 1].tool === "CLOSE"
-    ) {
-      setIsAgentFinished(true);
+  // AIエージェント実行
+  const runAgent = useCallback(async (sessionId: string, goal: string) => {
+    try {
+      setIsLoading(true);
+      agentStateRef.current.isLoading = true;
       
-      // スクリーンショット取得停止
-      if (screenshotIntervalRef.current) {
-        clearInterval(screenshotIntervalRef.current);
-      }
-      
-      // 完了メッセージを追加
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        type: 'assistant',
-        content: 'タスクが完了しました。',
-        timestamp: new Date(),
-        steps: uiState.steps
-      }]);
-      
-      // セッション状態を完了に更新
-      if (sessionId) {
-        fetch(`/api/chat-history?id=${sessionId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'completed',
-            steps: uiState.steps
-          })
-        }).catch(console.error);
-      }
-      
-      fetch("/api/session", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: uiState.sessionId,
-        }),
+          action: 'RUN',
+          sessionId: sessionId,
+          goal: goal
+        })
       });
-    }
-  }, [uiState.sessionId, uiState.steps, sessionId]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  useEffect(() => {
-    console.log("useEffect called");
-    const initializeSession = async () => {
-      if (initializationRef.current) return;
-      initializationRef.current = true;
-
-      // 過去のセッションの場合は新しいエージェント実行をしない
-      if (sessionId) {
-        await loadHistorySession();
-        return;
+      
+      if (!response.body) {
+        throw new Error('Response body is null');
       }
-
-      if (initialMessage && !agentStateRef.current.sessionId) {
-        setIsLoading(true);
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let stepNumber = 1;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        // 質問形式かどうかをチェック
-        if (isQuestion(initialMessage)) {
-          // 検索処理メッセージを追加
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: 'ウェブを検索して情報を調べています...',
-            timestamp: new Date()
-          }]);
-        } else {
-          // 通常のタスク実行メッセージ
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: 'タスクを実行しています...',
-            timestamp: new Date()
-          }]);
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'step') {
+                addStepMessage(data.step, stepNumber++);
+                
+                setUiState(prev => ({
+                  ...prev,
+                  steps: [...prev.steps, data.step]
+                }));
+                
+                agentStateRef.current.steps.push(data.step);
+              }
+            } catch (error) {
+              console.error('データ解析エラー:', error);
+            }
+          }
         }
+      }
+      
+      // 完了処理
+      setIsAgentFinished(true);
+      await updateSessionStatus('completed', 'タスクが正常に完了しました。');
+      
+    } catch (error) {
+      console.error('AIエージェント実行エラー:', error);
+      
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        type: 'assistant',
+        content: 'AIエージェントの実行中にエラーが発生しました。',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      saveMessageToDb(errorMessage);
+      
+      await updateSessionStatus('error', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+      agentStateRef.current.isLoading = false;
+    }
+  }, [addStepMessage, updateSessionStatus, saveMessageToDb]);
 
+  // 初期化処理
+  useEffect(() => {
+    if (initializationRef.current) return;
+    
+    const initializeSession = async () => {
+      initializationRef.current = true;
+      
+      if (sessionId) {
+        // 既存セッションの読み込み
+        await loadHistorySession();
+      } else if (initialMessage) {
+        // 新しいセッション開始
+        const userMessage: ChatMessage = {
+          id: `user-${Date.now()}`,
+          type: 'user',
+          content: initialMessage,
+          timestamp: new Date()
+        };
+        setMessages([userMessage]);
+        
+        // セッション作成とブラウザ初期化
         try {
-          const sessionResponse = await fetch("/api/session", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+          setIsLoading(true);
+          
+          const sessionResponse = await fetch('/api/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              contextId: contextId,
-            }),
+              contextId: contextId
+            })
           });
-          const sessionData = await sessionResponse.json();
-
-          if (!sessionData.success) {
-            throw new Error(sessionData.error || "Failed to create session");
+          
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json();
+            
+            setUiState(prev => ({
+              ...prev,
+              sessionId: sessionData.sessionId,
+              sessionUrl: sessionData.sessionUrl
+            }));
+            
+            agentStateRef.current.sessionId = sessionData.sessionId;
+            agentStateRef.current.sessionUrl = sessionData.sessionUrl;
+            
+            // AIエージェント実行
+            await runAgent(sessionData.sessionId, initialMessage);
           }
-
-          setContextId(sessionData.contextId);
-
-          agentStateRef.current = {
-            ...agentStateRef.current,
-            sessionId: sessionData.sessionId,
-            sessionUrl: sessionData.sessionUrl.replace(
-              "https://www.browserbase.com/devtools-fullscreen/inspector.html",
-              "https://www.browserbase.com/devtools-internal-compiled/index.html"
-            ),
-          };
-
-          setUiState({
-            sessionId: sessionData.sessionId,
-            sessionUrl: sessionData.sessionUrl.replace(
-              "https://www.browserbase.com/devtools-fullscreen/inspector.html",
-              "https://www.browserbase.com/devtools-internal-compiled/index.html"
-            ),
-            steps: [],
-          });
-
-          // エージェント実行開始
-          await runAgent(sessionData.sessionId, initialMessage);
         } catch (error) {
-          console.error("Session initialization failed:", error);
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
+          console.error('セッション初期化エラー:', error);
+          const errorMessage: ChatMessage = {
+            id: `error-${Date.now()}`,
             type: 'assistant',
-            content: 'エラーが発生しました。セッションの初期化に失敗しました。',
+            content: 'セッションの初期化中にエラーが発生しました。',
             timestamp: new Date()
-          }]);
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          saveMessageToDb(errorMessage);
         } finally {
           setIsLoading(false);
         }
       }
     };
-
+    
     initializeSession();
-  }, [initialMessage, contextId, setContextId, isQuestion, sessionId]);
+  }, [initialMessage, sessionId, contextId, loadHistorySession, runAgent, saveMessageToDb]);
 
-  const runAgent = async (sessionId: string, goal: string) => {
-    try {
-      let currentSteps: BrowserStep[] = [];
-      let stepNumber = 1;
-
-      // 最初のステップを開始
-      const startResponse = await fetch("/api/agent", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId,
-          goal,
-          action: "START",
-        }),
-      });
-
-      const startData = await startResponse.json();
-      if (startData.success) {
-        currentSteps = startData.steps;
-        setUiState(prev => ({ ...prev, steps: currentSteps }));
-        
-        // ステップをチャットに追加
-        addStepMessage(startData.result, stepNumber++);
-      }
-
-      // ステップを継続実行
-      while (true) {
-        // 次のステップを取得
-        const nextStepResponse = await fetch("/api/agent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sessionId,
-            goal,
-            action: "GET_NEXT_STEP",
-            previousSteps: currentSteps,
-          }),
-        });
-
-        const nextStepData = await nextStepResponse.json();
-        if (nextStepData.success) {
-          currentSteps = nextStepData.steps;
-          setUiState(prev => ({ ...prev, steps: currentSteps }));
-
-          if (nextStepData.done) {
-            // 最終ステップをチャットに追加
-            addStepMessage(nextStepData.result, stepNumber);
-            break;
-          }
-
-          // ステップをチャットに追加
-          addStepMessage(nextStepData.result, stepNumber++);
-
-          // ステップを実行
-          const executeResponse = await fetch("/api/agent", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              sessionId,
-              action: "EXECUTE_STEP",
-              step: nextStepData.result,
-            }),
-          });
-
-          const executeData = await executeResponse.json();
-          if (executeData.done) {
-            break;
-          }
-
-          // 実行結果があれば検索結果として表示
-          if (executeData.extraction && isQuestion(goal)) {
-            addSearchResult(goal, executeData.extraction);
-          }
-        } else {
-          console.error("エージェントステップエラー:", nextStepData.error);
-          break;
-        }
-
-        // 少し待機
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    } catch (error) {
-      console.error("エージェント実行エラー:", error);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        type: 'assistant',
-        content: 'エラーが発生しました。タスクの実行中に問題が発生しました。',
-        timestamp: new Date()
-      }]);
-    }
-  };
-
+  // ツール関連のヘルパー関数
   const getToolIcon = (tool: string) => {
     switch (tool) {
-      case "GOTO":
-        return <Navigation className="w-3 h-3" />;
-      case "ACT":
-        return <Activity className="w-3 h-3" />;
-      case "EXTRACT":
-        return <FileText className="w-3 h-3" />;
-      case "OBSERVE":
-        return <Eye className="w-3 h-3" />;
-      case "WAIT":
-        return <Clock className="w-3 h-3" />;
-      case "NAVBACK":
-        return <ArrowRight className="w-3 h-3 rotate-180" />;
-      case "CLOSE":
-        return <Check className="w-3 h-3" />;
-      default:
-        return <Activity className="w-3 h-3" />;
+      case 'GOTO': return <Navigation className="w-3 h-3" />;
+      case 'ACT': return <Activity className="w-3 h-3" />;
+      case 'EXTRACT': return <FileText className="w-3 h-3" />;
+      case 'OBSERVE': return <Eye className="w-3 h-3" />;
+      case 'SEARCH': return <Search className="w-3 h-3" />;
+      case 'WAIT': return <Clock className="w-3 h-3" />;
+      default: return <ArrowRight className="w-3 h-3" />;
     }
   };
 
   const getToolVariant = (tool: string) => {
     switch (tool) {
-      case "GOTO":
-        return "default";
-      case "ACT":
-        return "secondary";
-      case "EXTRACT":
-        return "success";
-      case "OBSERVE":
-        return "warning";
-      case "WAIT":
-        return "minimal";
-      case "NAVBACK":
-        return "outline";
-      case "CLOSE":
-        return "success";
-      default:
-        return "secondary";
+      case 'GOTO': return 'default';
+      case 'ACT': return 'secondary';
+      case 'EXTRACT': return 'outline';
+      case 'OBSERVE': return 'default';
+      case 'SEARCH': return 'secondary';
+      case 'WAIT': return 'outline';
+      default: return 'default';
     }
   };
 
   const getToolColor = (tool: string) => {
     switch (tool) {
-      case "GOTO":
-        return "from-[#00ADB5]/20 to-[#00ADB5]/10 text-[#00ADB5]";
-      case "ACT":
-        return "from-purple-500/20 to-purple-600/10 text-purple-400";
-      case "EXTRACT":
-        return "from-green-500/20 to-green-600/10 text-green-400";
-      case "OBSERVE":
-        return "from-yellow-500/20 to-yellow-600/10 text-yellow-400";
-      case "WAIT":
-        return "from-gray-500/20 to-gray-600/10 text-gray-400";
-      case "NAVBACK":
-        return "from-blue-500/20 to-blue-600/10 text-blue-400";
-      case "CLOSE":
-        return "from-emerald-500/20 to-emerald-600/10 text-emerald-400";
-      default:
-        return "from-gray-500/20 to-gray-600/10 text-gray-400";
+      case 'GOTO': return 'from-blue-500/30 to-blue-600/30 text-blue-400';
+      case 'ACT': return 'from-green-500/30 to-green-600/30 text-green-400';
+      case 'EXTRACT': return 'from-purple-500/30 to-purple-600/30 text-purple-400';
+      case 'OBSERVE': return 'from-yellow-500/30 to-yellow-600/30 text-yellow-400';
+      case 'SEARCH': return 'from-cyan-500/30 to-cyan-600/30 text-cyan-400';
+      case 'WAIT': return 'from-gray-500/30 to-gray-600/30 text-gray-400';
+      default: return 'from-gray-500/30 to-gray-600/30 text-gray-400';
     }
   };
 
+  // メッセージ送信処理
   const handleSendMessage = async (message: string) => {
-    if (!message.trim()) return;
-
-    // ユーザーメッセージを追加
+    if (!message.trim() || isLoading) return;
+    
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       type: 'user',
       content: message,
       timestamp: new Date()
     };
     
     setMessages(prev => [...prev, userMessage]);
-    setInputValue("");
+    await saveMessageToDb(userMessage);
     
-    // 質問形式の場合は検索処理
-    if (isQuestion(message)) {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        type: 'assistant',
-        content: 'ウェブを検索して回答を調べています...',
-        timestamp: new Date()
-      }]);
-      
-      // 新しいエージェント実行を開始
-      if (uiState.sessionId) {
-        await runAgent(uiState.sessionId, message);
-      }
-    } else {
-      // 通常のタスク実行
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        type: 'assistant',
-        content: 'タスクを実行しています...',
-        timestamp: new Date()
-      }]);
-      
-      if (uiState.sessionId) {
-        await runAgent(uiState.sessionId, message);
-      }
+    if (uiState.sessionId) {
+      await runAgent(uiState.sessionId, message);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSendMessage(inputValue);
+    setInputValue("");
   };
 
+  // ステータス関連
   const getAIStatus = () => {
     if (isLoading) return 'working';
     if (isAgentFinished) return 'completed';
@@ -625,7 +519,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
     switch (status) {
       case 'working':
         return {
-          gradient: 'from-[#00ADB5] via-cyan-500 to-blue-600',
+          gradient: 'from-[#EC625F] via-[#EC625F] to-[#d85450]',
           icon: Brain,
           pulse: true,
           text: 'AI 実行中',
@@ -642,7 +536,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
       case 'idle':
       default:
         return {
-          gradient: 'from-slate-400 via-gray-500 to-zinc-600',
+          gradient: 'from-[#525252] via-[#414141] to-[#313131]',
           icon: Bot,
           pulse: false,
           text: 'AI 待機中',
@@ -653,31 +547,6 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
 
   const currentStatus = getAIStatus();
   const statusConfig = getStatusConfig(currentStatus);
-
-  // メッセージ保存機能
-  const saveMessagesToHistory = useCallback(async () => {
-    if (!sessionId || isHistorySession) return;
-    
-    try {
-      await fetch(`/api/chat-history?id=${sessionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: messages,
-          steps: uiState.steps
-        })
-      });
-    } catch (error) {
-      console.error('メッセージ保存エラー:', error);
-    }
-  }, [sessionId, messages, uiState.steps, isHistorySession]);
-
-  // メッセージが更新されるたびに保存
-  useEffect(() => {
-    if (messages.length > 0) {
-      saveMessagesToHistory();
-    }
-  }, [messages, saveMessagesToHistory]);
 
   // ステップ展開/折りたたみ
   const toggleStepExpansion = (stepId: string) => {
@@ -694,14 +563,15 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
 
   return (
     <motion.div
-      className="min-h-screen bg-[#222831] text-[#EEEEEE] flex flex-col relative overflow-hidden"
+      className="min-h-screen bg-[#313131] text-white flex flex-col relative overflow-hidden"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
       exit="exit"
     >
+      {/* ヘッダー */}
       <motion.nav
-        className="relative z-50 flex justify-between items-center px-6 py-4 border-b border-[#495057] bg-[#393E46]/80 backdrop-blur-xl"
+        className="relative z-50 flex justify-between items-center px-6 py-4 border-b border-[#525252] bg-[#414141]/80 backdrop-blur-xl"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -716,16 +586,13 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             <div className={`w-12 h-12 bg-gradient-to-br ${statusConfig.gradient} rounded-full flex items-center justify-center shadow-lg relative ${
               statusConfig.pulse ? 'animate-pulse' : ''
             }`}>
-              {/* 外側のリング効果 */}
               {statusConfig.pulse && (
                 <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${statusConfig.gradient} opacity-30 animate-ping`} />
               )}
               
-              {/* アイコン */}
               <statusConfig.icon className="w-6 h-6 text-white relative z-10" />
               
-              {/* ステータスドット */}
-              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#222831] ${
+              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#313131] ${
                 currentStatus === 'working' 
                   ? 'bg-green-400 animate-pulse' 
                   : currentStatus === 'completed'
@@ -737,7 +604,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
           
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-semibold text-[#EEEEEE] text-lg">オープンオペレーター</h1>
+              <h1 className="font-semibold text-white text-lg">オープンオペレーター</h1>
               <Badge 
                 variant="secondary" 
                 className={`text-xs px-2 py-1 ${
@@ -751,32 +618,32 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 {statusConfig.text}
               </Badge>
             </div>
-            <p className="text-xs text-[#CED4DA] mt-1">{statusConfig.description}</p>
+            <p className="text-xs text-gray-300 mt-1">{statusConfig.description}</p>
           </div>
         </div>
         <Button
           onClick={onClose}
           variant="ghost"
-          className="gap-2 text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057]"
+          className="gap-2 text-gray-300 hover:text-white hover:bg-[#525252]"
         >
           <X className="w-4 h-4" />
           閉じる
           {!isMobile && (
-            <kbd className="px-2 py-1 text-xs bg-[#495057] rounded-md border border-[#6C757D]">ESC</kbd>
+            <kbd className="px-2 py-1 text-xs bg-[#525252] rounded-md border border-[#525252]">ESC</kbd>
           )}
         </Button>
       </motion.nav>
       
       <main className="flex-1 flex relative z-10">
-        {/* Left Chat Panel */}
-        <div className="w-1/2 flex flex-col border-r border-[#495057] bg-[#393E46]/50 backdrop-blur-xl">
-          {/* Chat Messages */}
+        {/* チャットパネル */}
+        <div className="w-1/2 flex flex-col border-r border-[#525252] bg-[#414141]/50 backdrop-blur-xl">
+          {/* メッセージエリア */}
           <div 
             ref={chatContainerRef}
             className="flex-1 overflow-y-auto p-6 space-y-4"
             style={{
               scrollbarWidth: 'thin',
-              scrollbarColor: '#495057 transparent',
+              scrollbarColor: '#525252 transparent',
               maxHeight: 'calc(100vh - 200px)'
             }}
           >
@@ -789,32 +656,28 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div className={`flex gap-3 max-w-[85%] ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* Avatar */}
+                  {/* アバター */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     message.type === 'user' 
-                      ? 'bg-[#00ADB5] shadow-lg shadow-[#00ADB5]/25' 
+                      ? 'bg-[#EC625F] shadow-lg shadow-[#EC625F]/25' 
                       : message.type === 'step'
-                      ? 'step-indicator'
-                      : 'bg-[#495057] backdrop-blur-xl border border-[#6C757D] shadow-lg'
+                      ? 'bg-[#525252] border border-[#525252]'
+                      : 'bg-[#525252] backdrop-blur-xl border border-[#525252] shadow-lg'
                   }`}>
                     {message.type === 'user' ? (
-                      <User className="w-4 h-4 text-[#222831]" />
+                      <User className="w-4 h-4 text-white" />
                     ) : message.type === 'step' ? (
-                      <span className="text-xs font-bold">{message.step?.stepNumber || '•'}</span>
+                      <span className="text-xs font-bold text-white">{message.step?.stepNumber || '•'}</span>
                     ) : (
-                      <Bot className="w-4 h-4 text-[#EEEEEE]" />
+                      <Bot className="w-4 h-4 text-white" />
                     )}
                   </div>
                   
-                  {/* Message Content */}
+                  {/* メッセージ内容 */}
                   <div className={`rounded-2xl px-4 py-3 backdrop-blur-xl ${
                     message.type === 'user'
-                      ? 'bg-[#00ADB5] text-[#222831] shadow-lg shadow-[#00ADB5]/25'
-                      : message.type === 'step'
-                      ? 'bg-[#495057] text-[#EEEEEE] border border-[#6C757D] shadow-lg'
-                      : message.isSearchResult
-                      ? 'search-result'
-                      : 'bg-[#495057] text-[#EEEEEE] border border-[#6C757D] shadow-lg'
+                      ? 'bg-[#EC625F] text-white shadow-lg shadow-[#EC625F]/25'
+                      : 'bg-[#525252] text-white border border-[#525252] shadow-lg'
                   }`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
@@ -835,7 +698,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => toggleStepExpansion(message.id)}
-                                className="h-6 px-2 text-xs text-[#CED4DA] hover:text-[#EEEEEE]"
+                                className="h-6 px-2 text-xs text-gray-300 hover:text-white"
                               >
                                 {expandedSteps.has(message.id) ? '▼' : '▶'}
                               </Button>
@@ -846,17 +709,17 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                className="space-y-2 pl-2 border-l-2 border-[#6C757D]/30"
+                                className="space-y-2 pl-2 border-l-2 border-[#525252]/30"
                               >
                                 <div>
-                                  <p className="text-xs text-[#CED4DA] font-medium">アクション:</p>
-                                  <p className="text-xs text-[#EEEEEE] font-mono bg-[#222831] p-2 rounded mt-1 break-all">
+                                  <p className="text-xs text-gray-300 font-medium">アクション:</p>
+                                  <p className="text-xs text-white font-mono bg-[#313131] p-2 rounded mt-1 break-all">
                                     {message.step.instruction}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-[#CED4DA] font-medium">推論:</p>
-                                  <p className="text-xs text-[#EEEEEE] italic mt-1">
+                                  <p className="text-xs text-gray-300 font-medium">推論:</p>
+                                  <p className="text-xs text-white italic mt-1">
                                     {message.step.reasoning}
                                   </p>
                                 </div>
@@ -882,12 +745,12 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 className="flex justify-start"
               >
                 <div className="flex gap-3 max-w-[85%]">
-                  <div className="w-8 h-8 rounded-full bg-[#495057] flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-[#EEEEEE]" />
+                  <div className="w-8 h-8 rounded-full bg-[#525252] flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-[#495057] text-[#EEEEEE] rounded-2xl px-4 py-3">
+                  <div className="bg-[#525252] text-white rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-[#00ADB5]" />
+                      <Loader2 className="w-4 h-4 animate-spin text-[#EC625F]" />
                       <span className="text-sm">処理中...</span>
                     </div>
                   </div>
@@ -896,8 +759,8 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             )}
           </div>
 
-          {/* Input Area */}
-          <div className="p-6 border-t border-[#495057] bg-[#393E46]/80 backdrop-blur-xl">
+          {/* 入力エリア */}
+          <div className="p-6 border-t border-[#525252] bg-[#414141]/80 backdrop-blur-xl">
             {!isHistorySession ? (
               <form onSubmit={handleSubmit} className="flex gap-3">
                 <Input
@@ -905,19 +768,19 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="追加のリクエストを入力..."
                   disabled={isLoading}
-                  className="flex-1 bg-[#495057] backdrop-blur-xl border border-[#6C757D] focus:border-[#00ADB5] text-[#EEEEEE] placeholder:text-[#CED4DA] rounded-xl"
+                  className="flex-1 bg-[#525252] backdrop-blur-xl border border-[#525252] focus:border-[#EC625F] text-white placeholder:text-gray-300 rounded-xl"
                 />
                 <Button
                   type="submit"
                   disabled={!inputValue.trim() || isLoading}
-                  className="bg-[#00ADB5] hover:bg-[#009AA3] text-[#222831]"
+                  className="bg-[#EC625F] hover:bg-[#d85450] text-white"
                 >
                   <Send className="w-4 h-4" />
                 </Button>
               </form>
             ) : (
               <div className="text-center py-4">
-                <p className="text-sm text-[#CED4DA]">
+                <p className="text-sm text-gray-300">
                   これは過去のセッションです。新しいチャットを開始するには「新しいチャット」ボタンを押してください。
                 </p>
               </div>
@@ -925,18 +788,18 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
           </div>
         </div>
 
-        {/* Right Browser Panel */}
-        <div className="w-1/2 flex flex-col bg-[#393E46]/50 backdrop-blur-xl">
-          {/* Browser Header */}
-          <div className="p-6 border-b border-[#495057] bg-[#393E46]/80 backdrop-blur-xl">
+        {/* ブラウザパネル */}
+        <div className="w-1/2 flex flex-col bg-[#414141]/50 backdrop-blur-xl">
+          {/* ブラウザヘッダー */}
+          <div className="p-6 border-b border-[#525252] bg-[#414141]/80 backdrop-blur-xl">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#00ADB5]/20 to-cyan-500/20 rounded-full flex items-center justify-center border border-[#00ADB5]/30">
-                  <Globe className="w-5 h-5 text-[#00ADB5]" />
+                <div className="w-10 h-10 bg-gradient-to-br from-[#EC625F]/20 to-[#EC625F]/20 rounded-full flex items-center justify-center border border-[#EC625F]/30">
+                  <Globe className="w-5 h-5 text-[#EC625F]" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-[#EEEEEE]">ブラウザプレビュー</h2>
-                  <p className="text-xs text-[#CED4DA]">リアルタイムスクリーンショット</p>
+                  <h2 className="text-base font-semibold text-white">ブラウザプレビュー</h2>
+                  <p className="text-xs text-gray-300">リアルタイムスクリーンショット</p>
                 </div>
               </div>
               {uiState.sessionId && (
@@ -948,7 +811,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             </div>
           </div>
 
-          {/* Browser Content */}
+          {/* ブラウザ内容 */}
           <div className="flex-1 p-6">
             {currentScreenshot && !isAgentFinished ? (
               <motion.div
@@ -957,9 +820,9 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 transition={{ delay: 0.4, type: "spring", damping: 15 }}
                 className="h-full"
               >
-                <div className="rounded-xl overflow-hidden shadow-2xl border border-[#495057] h-full bg-[#222831] screenshot-preview">
-                  {/* ブラウザ風のタブバー */}
-                  <div className="bg-[#393E46] border-b border-[#495057] px-4 py-3">
+                <div className="rounded-xl overflow-hidden shadow-2xl border border-[#525252] h-full bg-[#313131]">
+                  {/* ブラウザタブバー */}
+                  <div className="bg-[#414141] border-b border-[#525252] px-4 py-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
@@ -967,18 +830,18 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                           <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-lg shadow-yellow-500/50" />
                           <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />
                         </div>
-                        <div className="h-4 w-px bg-[#495057]" />
-                        <div className="bg-[#495057] rounded-lg px-3 py-1 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-[#00ADB5] rounded-full animate-pulse" />
-                          <span className="text-xs text-[#CED4DA] font-mono">browser.session</span>
+                        <div className="h-4 w-px bg-[#525252]" />
+                        <div className="bg-[#525252] rounded-lg px-3 py-1 flex items-center gap-2">
+                          <div className="w-2 h-2 bg-[#EC625F] rounded-full animate-pulse" />
+                          <span className="text-xs text-gray-300 font-mono">browser.session</span>
                         </div>
                       </div>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="h-6 w-6 p-0 hover:bg-[#495057]"
+                        className="h-6 w-6 p-0 hover:bg-[#525252]"
                       >
-                        <ExternalLink className="w-3 h-3 text-[#CED4DA]" />
+                        <ExternalLink className="w-3 h-3 text-gray-300" />
                       </Button>
                     </div>
                   </div>
@@ -988,13 +851,12 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                       alt="Browser Screenshot"
                       width={800}
                       height={600}
-                      className="w-full h-full object-contain rounded-lg border border-[#495057]"
+                      className="w-full h-full object-contain rounded-lg border border-[#525252]"
                       priority
                     />
-                    {/* 更新インジケーター */}
-                    <div className="absolute top-2 right-2 flex items-center gap-2 bg-[#393E46]/80 backdrop-blur-sm px-3 py-1 rounded-full border border-[#495057]">
+                    <div className="absolute top-2 right-2 flex items-center gap-2 bg-[#414141]/80 backdrop-blur-sm px-3 py-1 rounded-full border border-[#525252]">
                       <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                      <span className="text-xs text-[#CED4DA]">2秒ごとに更新</span>
+                      <span className="text-xs text-gray-300">2秒ごとに更新</span>
                     </div>
                   </div>
                 </div>
@@ -1006,7 +868,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 transition={{ type: "spring", damping: 15 }}
                 className="h-full flex items-center justify-center"
               >
-                <Card className="bg-[#393E46] border-[#495057] shadow-2xl max-w-md w-full">
+                <Card className="bg-[#414141] border-[#525252] shadow-2xl max-w-md w-full">
                   <CardContent className="p-8 text-center">
                     <motion.div 
                       initial={{ scale: 0 }}
@@ -1016,10 +878,10 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                     >
                       <Check className="w-10 h-10 text-green-400" />
                     </motion.div>
-                    <h3 className="text-xl font-bold text-[#EEEEEE] mb-3 bg-gradient-to-r from-[#EEEEEE] to-[#CED4DA] bg-clip-text text-transparent">
+                    <h3 className="text-xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                       セッション完了
                     </h3>
-                    <p className="text-[#CED4DA] text-sm leading-relaxed">
+                    <p className="text-gray-300 text-sm leading-relaxed">
                       すべてのタスクが正常に実行されました
                     </p>
                     <div className="mt-6 flex items-center justify-center gap-2 text-xs text-green-400">
@@ -1036,27 +898,27 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 transition={{ type: "spring", damping: 15 }}
                 className="h-full flex items-center justify-center"
               >
-                <Card className="bg-[#393E46] border-[#495057] shadow-2xl max-w-md w-full">
+                <Card className="bg-[#414141] border-[#525252] shadow-2xl max-w-md w-full">
                   <CardContent className="p-8 text-center">
                     <motion.div 
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: 0.2, type: "spring", damping: 10 }}
-                      className="w-20 h-20 bg-gradient-to-br from-[#00ADB5]/30 to-cyan-600/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-[#00ADB5]/20"
+                      className="w-20 h-20 bg-gradient-to-br from-[#EC625F]/30 to-[#EC625F]/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-[#EC625F]/20"
                     >
-                      <Brain className="w-10 h-10 text-[#00ADB5]" />
+                      <Brain className="w-10 h-10 text-[#EC625F]" />
                     </motion.div>
-                    <h3 className="text-xl font-bold text-[#EEEEEE] mb-3 bg-gradient-to-r from-[#EEEEEE] to-[#CED4DA] bg-clip-text text-transparent">
+                    <h3 className="text-xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                       セッション準備中
                     </h3>
-                    <p className="text-[#CED4DA] text-sm leading-relaxed mb-4">
+                    <p className="text-gray-300 text-sm leading-relaxed mb-4">
                       ブラウザセッションを初期化しています...
                     </p>
                     <div className="flex items-center justify-center gap-2">
                       <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-[#00ADB5] rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-                        <div className="w-2 h-2 bg-[#00ADB5] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-2 h-2 bg-[#00ADB5] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        <div className="w-2 h-2 bg-[#EC625F] rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                        <div className="w-2 h-2 bg-[#EC625F] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-[#EC625F] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                       </div>
                     </div>
                   </CardContent>
@@ -1065,27 +927,27 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
             )}
           </div>
 
-          {/* Steps Summary */}
+          {/* ステップサマリー */}
           {uiState.steps.length > 0 && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="p-6 border-t border-[#495057] bg-[#393E46]/80 backdrop-blur-sm"
+              className="p-6 border-t border-[#525252] bg-[#414141]/80 backdrop-blur-sm"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-[#00ADB5]/20 to-slate-500/20 rounded-full flex items-center justify-center border border-[#00ADB5]/30">
-                    <Sparkles className="w-4 h-4 text-[#00ADB5]" />
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#EC625F]/20 to-[#525252]/20 rounded-full flex items-center justify-center border border-[#EC625F]/30">
+                    <Sparkles className="w-4 h-4 text-[#EC625F]" />
                   </div>
                   <div>
-                    <span className="text-sm font-semibold text-[#EEEEEE]">実行ステップ</span>
-                    <p className="text-xs text-[#CED4DA]">AI実行履歴</p>
+                    <span className="text-sm font-semibold text-white">実行ステップ</span>
+                    <p className="text-xs text-gray-300">AI実行履歴</p>
                   </div>
                 </div>
                 <Badge 
                   variant="secondary" 
-                  className="text-xs bg-[#495057] text-[#CED4DA] border-[#6C757D] px-3 py-1"
+                  className="text-xs bg-[#525252] text-gray-300 border-[#525252] px-3 py-1"
                 >
                   {uiState.steps.length} steps
                 </Badge>
@@ -1110,7 +972,7 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
                 {uiState.steps.length > 6 && (
                   <Badge 
                     variant="outline" 
-                    className="text-xs bg-[#495057] text-[#CED4DA] border-[#6C757D] px-3 py-1.5"
+                    className="text-xs bg-[#525252] text-gray-300 border-[#525252] px-3 py-1.5"
                   >
                     +{uiState.steps.length - 6} more
                   </Badge>
@@ -1122,4 +984,4 @@ export default function ChatFeed({ initialMessage, onClose, sessionId }: ChatFee
       </main>
     </motion.div>
   );
-}
+} 
