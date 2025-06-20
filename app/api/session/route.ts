@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Browserbase from "@browserbasehq/sdk";
+import { playwrightBrowser } from "@/app/lib/playwright-browser";
 
 type BrowserbaseRegion =
   | "us-west-2"
@@ -205,31 +205,53 @@ async function getDebugUrl(sessionId: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const timezone = body.timezone as string;
-    const providedContextId = body.contextId as string;
-    const { session, contextId } = await createSession(
-      timezone,
-      providedContextId
-    );
-    const liveUrl = await getDebugUrl(session.id);
+    const { contextId } = body;
+
+    // Create a new Playwright browser session
+    const { sessionId, sessionUrl } = await playwrightBrowser.createSession();
+
     return NextResponse.json({
       success: true,
-      sessionId: session.id,
-      sessionUrl: liveUrl,
-      contextId,
+      sessionId,
+      sessionUrl,
+      contextId: contextId || Date.now().toString(),
     });
   } catch (error) {
     console.error("Error creating session:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to create session" },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to create session" 
+      },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(request: Request) {
-  const body = await request.json();
-  const sessionId = body.sessionId as string;
-  await endSession(sessionId);
-  return NextResponse.json({ success: true });
+  try {
+    const body = await request.json();
+    const { sessionId } = body;
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "Session ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Close the Playwright browser session
+    await playwrightBrowser.closeSession(sessionId);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error closing session:", error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to close session" 
+      },
+      { status: 500 }
+    );
+  }
 }

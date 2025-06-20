@@ -151,30 +151,8 @@ export default function Home() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen relative overflow-hidden">
-        {/* アニメーション背景 */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-gray-950/20 to-slate-950">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-950/30 via-transparent to-slate-950/30" />
-          {/* 動的光効果 */}
-          <motion.div
-            animate={{
-              background: [
-                "radial-gradient(800px circle at 0% 0%, rgb(107, 114, 128, 0.1) 0%, transparent 50%)",
-                "radial-gradient(800px circle at 100% 100%, rgb(156, 163, 175, 0.1) 0%, transparent 50%)",
-                "radial-gradient(800px circle at 0% 100%, rgb(75, 85, 99, 0.1) 0%, transparent 50%)",
-                "radial-gradient(800px circle at 100% 0%, rgb(55, 65, 81, 0.1) 0%, transparent 50%)",
-              ]
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            className="absolute inset-0"
-          />
-        </div>
-
-        <div className="relative z-10 h-full text-white flex overflow-hidden">
+      <div className="h-screen relative overflow-hidden bg-[#222831]">
+        <div className="relative z-10 h-full text-[#EEEEEE] flex overflow-hidden">
           {/* Sidebar */}
           <motion.aside
             initial={false}
@@ -182,16 +160,16 @@ export default function Home() {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="relative flex-shrink-0 overflow-hidden"
           >
-            <div className="flex flex-col h-full w-[280px] backdrop-blur-xl bg-white/[0.02] border-r border-white/10">
+            <div className="flex flex-col h-full w-[280px] bg-[#393E46] border-r border-[#495057]">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center justify-between p-4 border-b border-[#495057]">
                 <Button
                   onClick={startNewChat}
                   variant="ghost"
-                  className="flex items-center gap-3 text-white hover:bg-white/10 flex-1 justify-start bg-white/5 border border-white/10 rounded-xl h-11 transition-all duration-300 hover:scale-[1.02] hover:border-white/20"
+                  className="flex items-center gap-3 text-[#EEEEEE] hover:bg-[#495057] flex-1 justify-start bg-[#393E46] border border-[#495057] rounded-lg h-11 transition-all duration-200"
                 >
-                  <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center">
-                    <PenSquare className="w-3 h-3 text-white" />
+                  <div className="w-5 h-5 rounded bg-[#00ADB5] flex items-center justify-center">
+                    <PenSquare className="w-3 h-3 text-[#222831]" />
                   </div>
                   新しいチャット
                 </Button>
@@ -199,7 +177,7 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsSidebarOpen(false)}
-                  className="text-white hover:bg-white/10 md:hidden ml-2 rounded-xl"
+                  className="text-[#EEEEEE] hover:bg-[#495057] md:hidden ml-2 rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </Button>
@@ -213,7 +191,7 @@ export default function Home() {
                       {[...Array(5)].map((_, i) => (
                         <motion.div 
                           key={i} 
-                          className="h-14 bg-white/5 rounded-xl animate-pulse backdrop-blur-sm"
+                          className="h-14 bg-[#495057] rounded-lg animate-pulse"
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: i * 0.1 }}
@@ -231,28 +209,30 @@ export default function Home() {
                       >
                         <Button
                           variant="ghost"
-                          className={`w-full justify-start text-left p-4 h-auto hover:bg-white/10 transition-all duration-300 rounded-xl backdrop-blur-sm ${
+                          className={`w-full justify-start text-left p-4 h-auto hover:bg-[#495057] transition-all duration-200 rounded-lg ${
                             selectedSessionId === session.id 
-                              ? 'bg-gradient-to-r from-gray-500/20 to-gray-600/20 border border-gray-500/30' 
-                              : 'hover:scale-[1.02] border border-transparent hover:border-white/10'
+                              ? 'bg-[#495057] border border-[#6C757D]' 
+                              : 'border border-transparent hover:border-[#6C757D]'
                           }`}
                           onClick={() => loadSession(session)}
                         >
                           <div className="flex items-start gap-3 w-full min-w-0">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
                               session.status === 'completed' 
-                                ? 'bg-gradient-to-br from-emerald-500 to-green-600' 
+                                ? 'bg-[#00ADB5]' 
                                 : session.status === 'in-progress'
-                                ? 'bg-gradient-to-br from-gray-500 to-gray-600'
-                                : 'bg-gradient-to-br from-red-500 to-pink-600'
+                                ? 'bg-[#CED4DA]'
+                                : 'bg-[#ef4444]'
                             }`}>
-                              <MessageSquare className="w-4 h-4 text-white" />
+                              <MessageSquare className={`w-4 h-4 ${
+                                session.status === 'completed' ? 'text-[#222831]' : 'text-[#EEEEEE]'
+                              }`} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white truncate leading-snug">
+                              <p className="text-sm font-medium text-[#EEEEEE] truncate leading-snug">
                                 {session.title}
                               </p>
-                              <p className="text-xs text-gray-400 truncate mt-1">
+                              <p className="text-xs text-[#CED4DA] truncate mt-1">
                                 {getTimeAgo(session.timestamp)}
                               </p>
                             </div>
@@ -261,7 +241,7 @@ export default function Home() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-7 w-7 text-gray-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/30 border border-transparent rounded-lg transition-all duration-300"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-7 w-7 text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] border border-transparent rounded transition-all duration-200"
                           onClick={(e) => deleteSession(session.id, e)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -269,8 +249,8 @@ export default function Home() {
                       </motion.div>
                     ))
                   ) : (
-                    <div className="text-center py-12 text-gray-400">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mx-auto mb-3">
+                    <div className="text-center py-12 text-[#CED4DA]">
+                      <div className="w-12 h-12 rounded bg-[#495057] flex items-center justify-center mx-auto mb-3">
                         <MessageSquare className="w-6 h-6 opacity-50" />
                       </div>
                       <p className="text-sm">履歴がありません</p>
@@ -280,10 +260,10 @@ export default function Home() {
               </div>
 
               {/* Footer */}
-              <div className="border-t border-white/10 p-3">
+              <div className="border-t border-[#495057] p-3">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/10 rounded-xl h-11 transition-all duration-300"
+                  className="w-full justify-start text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] rounded-lg h-11 transition-all duration-200"
                 >
                   <Settings className="w-5 h-5 mr-3" />
                   設定
@@ -295,23 +275,23 @@ export default function Home() {
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Top Bar */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10 backdrop-blur-xl bg-white/[0.02]">
+            <div className="flex items-center justify-between p-4 border-b border-[#495057] bg-[#393E46]">
               <div className="flex items-center gap-4">
                 {!isSidebarOpen && (
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setIsSidebarOpen(true)}
-                    className="text-white hover:bg-white/10 rounded-xl h-10 w-10 transition-all duration-300 hover:scale-105"
+                    className="text-[#EEEEEE] hover:bg-[#495057] rounded-lg h-10 w-10 transition-all duration-200"
                   >
                     <Menu className="w-5 h-5" />
                   </Button>
                 )}
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded bg-[#00ADB5] flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-[#222831]" />
                   </div>
-                  <h1 className="text-xl font-semibold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  <h1 className="text-xl font-semibold">
                     オープンオペレーター
                   </h1>
                 </div>
@@ -320,7 +300,7 @@ export default function Home() {
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-300"
+                  className="text-[#CED4DA] hover:text-[#EEEEEE] hover:bg-[#495057] rounded-lg transition-all duration-200"
                 >
                   <Brain className="w-4 h-4 mr-2" />
                   API
@@ -346,37 +326,15 @@ export default function Home() {
                         transition={{ delay: 0.1 }}
                         className="relative"
                       >
-                        <motion.div
-                          animate={{ 
-                            rotate: [0, 360],
-                          }}
-                          transition={{
-                            duration: 20,
-                            repeat: Infinity,
-                            ease: "linear"
-                          }}
-                          className="absolute inset-0 w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-gray-500 via-gray-600 to-slate-600 opacity-20 blur-lg"
-                        />
-                        <div className="relative w-20 h-20 bg-gradient-to-br from-gray-500 via-gray-600 to-slate-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-gray-500/25">
-                          <Bot className="w-10 h-10 text-white" />
-                          <motion.div
-                            animate={{
-                              scale: [1, 1.2, 1],
-                              opacity: [0.5, 0.8, 0.5]
-                            }}
-                            transition={{
-                              duration: 2,
-                              repeat: Infinity,
-                            }}
-                            className="absolute inset-0 rounded-2xl bg-gradient-to-br from-gray-400 to-gray-600 opacity-30"
-                          />
+                        <div className="relative w-20 h-20 bg-[#00ADB5] rounded-2xl mx-auto mb-6 flex items-center justify-center">
+                          <Bot className="w-10 h-10 text-[#222831]" />
                         </div>
                       </motion.div>
                       <motion.h2
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
-                        className="text-4xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-300 bg-clip-text text-transparent"
+                        className="text-4xl font-bold"
                       >
                         何をお手伝いしましょうか？
                       </motion.h2>
@@ -384,7 +342,7 @@ export default function Home() {
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.3 }}
-                        className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed"
+                        className="text-lg text-[#CED4DA] max-w-2xl mx-auto leading-relaxed"
                       >
                         AIエージェントがウェブを自動操作してタスクを実行します
                       </motion.p>
@@ -402,13 +360,13 @@ export default function Home() {
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             placeholder="メッセージを入力..."
-                            className="w-full h-16 pr-16 text-lg bg-white/5 backdrop-blur-xl border border-white/20 focus:border-gray-500/50 text-white placeholder:text-gray-400 rounded-2xl transition-all duration-300 focus:shadow-lg focus:shadow-gray-500/25 group-hover:border-white/30"
+                            className="w-full h-16 pr-16 text-lg bg-[#393E46] border border-[#495057] focus:border-[#00ADB5] text-[#EEEEEE] placeholder:text-[#CED4DA] rounded-xl transition-all duration-200"
                           />
                           <Button
                             type="submit"
                             disabled={!inputValue.trim()}
                             size="icon"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100 shadow-lg"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 bg-[#00ADB5] hover:bg-[#009AA3] disabled:bg-[#6C757D] disabled:opacity-50 rounded-lg transition-all duration-200 text-[#222831]"
                           >
                             <Send className="w-5 h-5" />
                           </Button>
@@ -428,29 +386,25 @@ export default function Home() {
                           title: "GitHub分析",
                           description: "リポジトリの貢献者を調査",
                           query: "BrowserbaseのStagehandの最大のGitHubコントリビューターは誰？",
-                          icon: "🔍",
-                          gradient: "from-emerald-500/20 to-green-500/10"
+                          icon: "🔍"
                         },
                         {
                           title: "株価情報",
                           description: "リアルタイム価格を取得",
                           query: "NVIDIAの株価はいくら？",
-                          icon: "📈",
-                          gradient: "from-blue-500/20 to-cyan-500/10"
+                          icon: "📈"
                         },
                         {
                           title: "スポーツ統計",
                           description: "チームの成績を確認",
                           query: "49ersの勝利数は？",
-                          icon: "🏈",
-                          gradient: "from-gray-500/20 to-slate-500/10"
+                          icon: "🏈"
                         },
                         {
                           title: "選手データ",
                           description: "パフォーマンス分析",
                           query: "ステフィン・カリーのPPGは？",
-                          icon: "🏀",
-                          gradient: "from-gray-500/20 to-slate-500/10"
+                          icon: "🏀"
                         }
                       ].map((item, index) => (
                         <motion.div
@@ -460,19 +414,19 @@ export default function Home() {
                           transition={{ delay: 0.6 + index * 0.1 }}
                         >
                           <Card
-                            className={`bg-gradient-to-br ${item.gradient} backdrop-blur-xl border border-white/10 hover:border-white/30 transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-lg hover:shadow-gray-500/10`}
+                            className="bg-[#393E46] border border-[#495057] hover:border-[#00ADB5] transition-all duration-200 cursor-pointer group hover-lift"
                             onClick={() => startChat(item.query)}
                           >
                             <CardContent className="p-6">
                               <div className="flex items-center gap-4">
-                                <div className="text-3xl filter drop-shadow-sm">{item.icon}</div>
+                                <div className="text-3xl">{item.icon}</div>
                                 <div className="flex-1">
-                                  <h3 className="font-semibold text-white group-hover:text-gray-200 transition-colors text-lg">
+                                  <h3 className="font-semibold text-[#EEEEEE] text-lg">
                                     {item.title}
                                   </h3>
-                                  <p className="text-sm text-gray-300 mt-1 leading-relaxed">{item.description}</p>
+                                  <p className="text-sm text-[#CED4DA] mt-1 leading-relaxed">{item.description}</p>
                                 </div>
-                                <Sparkles className="w-5 h-5 text-gray-400 opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                                <Sparkles className="w-5 h-5 text-[#CED4DA] opacity-0 group-hover:opacity-100 transition-all duration-200" />
                               </div>
                             </CardContent>
                           </Card>

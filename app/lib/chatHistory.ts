@@ -2,6 +2,21 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import path from 'path';
 
+export interface ChatMessage {
+  id: string;
+  type: 'user' | 'assistant' | 'system' | 'step';
+  content: string;
+  timestamp: string;
+  step?: {
+    text: string;
+    reasoning: string;
+    tool: string;
+    instruction: string;
+    stepNumber?: number;
+  };
+  isSearchResult?: boolean;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
@@ -9,6 +24,9 @@ export interface ChatSession {
   timestamp: string;
   status: 'completed' | 'in-progress' | 'error';
   steps?: any[];
+  messages?: ChatMessage[];
+  aiResponse?: string;
+  finalResult?: any;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -43,7 +61,7 @@ export async function updateChatSession(id: string, updates: Partial<ChatSession
   try {
     const data = await fs.readFile(filePath, 'utf-8');
     const session = JSON.parse(data);
-    const updatedSession = { ...session, ...updates };
+    const updatedSession = { ...session, ...updates, timestamp: new Date().toISOString() };
     await fs.writeFile(filePath, JSON.stringify(updatedSession, null, 2));
     return updatedSession;
   } catch (error) {

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { anthropic } from "@ai-sdk/anthropic";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
-import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
+import { playwrightBrowser } from "@/app/lib/playwright-browser";
 
-const LLMClient = anthropic("claude-3-7-sonnet-latest");
+const LLMClient = anthropic("claude-3-5-sonnet-latest");
 
 type Step = {
   text: string;
@@ -13,7 +13,7 @@ type Step = {
   instruction: string;
 };
 
-async function runStagehand({
+async function runPlaywright({
   sessionID,
   method,
   instruction,
@@ -30,168 +30,51 @@ async function runStagehand({
     | "NAVBACK";
   instruction?: string;
 }) {
-  const stagehand = new Stagehand({
-    browserbaseSessionID: sessionID,
-    env: "BROWSERBASE",
-    modelName: "claude-3.5-haiku",
-    modelClientOptions: {
-      apiKey: process.env.ANTHROPIC_API_KEY || "",
-    },
-    disablePino: true,
-    useAPI: false,
-    verbose: 1, // Enable more verbose logging
-  });
-  
   try {
-    // Add retry logic for initialization with exponential backoff
-    let initAttempts = 0;
-    const maxAttempts = 3;
-    let lastError: Error | null = null;
-    
-    while (initAttempts < maxAttempts) {
-      try {
-        console.log(`[log] Attempting Stagehand initialization (attempt ${initAttempts + 1}/${maxAttempts})`);
-        await stagehand.init();
-        
-        // Additional wait for browser context to be fully ready
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // More thorough validation of browser context
-        console.log(`[log] Validating browser context...`);
-        console.log(`[log] stagehand.page exists: ${!!stagehand.page}`);
-        
-        if (stagehand.page) {
-          try {
-            console.log(`[log] Testing page context...`);
-            const context = stagehand.page.context();
-            console.log(`[log] Page context exists: ${!!context}`);
-            
-            // Test if we can get browser info
-            const browser = context.browser();
-            console.log(`[log] Browser exists: ${!!browser}`);
-            
-            // Test basic page functionality
-            const isConnected = stagehand.page.isClosed();
-            console.log(`[log] Page is closed: ${isConnected}`);
-            
-            if (isConnected) {
-              throw new Error("Page is already closed");
-            }
-            
-          } catch (pageError) {
-            console.error(`[log] Page validation failed:`, pageError);
-            throw new Error(`Page context validation failed: ${pageError instanceof Error ? pageError.message : String(pageError)}`);
-          }
-        }
-        
-        // Check if browser context is properly initialized
-        if (!stagehand.page) {
-          throw new Error("Failed to initialize Stagehand page. Browser context is undefined.");
-        }
-        
-        console.log(`[log] Stagehand initialization successful on attempt ${initAttempts + 1}`);
-        break; // Success, exit retry loop
-        
-      } catch (error) {
-        lastError = error as Error;
-        initAttempts++;
-        console.log(`[log] Initialization attempt ${initAttempts} failed:`, error);
-        
-        if (initAttempts < maxAttempts) {
-          // Exponential backoff: wait 3s, then 6s
-          const waitTime = 3000 * initAttempts;
-          console.log(`[log] Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-    
-    // If all attempts failed, throw the last error
-    if (initAttempts >= maxAttempts) {
-      console.error(`[log] Failed to initialize Stagehand after ${maxAttempts} attempts`);
-      throw lastError || new Error("Failed to initialize Stagehand after multiple attempts");
-    }
-
-    const page = stagehand.page;
-
     switch (method) {
       case "GOTO": {
-        const exec = async () => {
-          await page.goto(instruction!, {
-            waitUntil: "commit",
-            timeout: 60000,
-          });
-        };
-        await retryStagehand(exec);
+        await playwrightBrowser.navigateTo(sessionID, instruction!);
         break;
       }
 
       case "ACT": {
-        const exec = async () => {
-          await page.act(instruction!);
-        };
-        await retryStagehand(exec);
+        await playwrightBrowser.performAction(sessionID, instruction!);
         break;
       }
 
       case "EXTRACT": {
-        const exec = async () => {
-          const { extraction } = await page.extract(instruction!);
-          return extraction;
-        };
-        return await retryStagehand(exec);
+        const extraction = await playwrightBrowser.extractContent(sessionID, instruction!);
+        return extraction;
       }
 
       case "OBSERVE": {
-        const exec = async () => page.observe(instruction!);
-        return await retryStagehand(exec);
+        const elements = await playwrightBrowser.observe(sessionID, instruction!);
+        return elements;
       }
 
       case "CLOSE":
-        await stagehand.close();
+        await playwrightBrowser.closeSession(sessionID);
         return;
 
       case "SCREENSHOT": {
-        try {
-          const cdpSession = await page.context().newCDPSession(page);
-          const { data } = await cdpSession.send("Page.captureScreenshot");
-          return data;
-        } catch (screenshotError) {
-          console.error("Error taking screenshot:", screenshotError);
-          throw new Error(`Failed to take screenshot: ${screenshotError instanceof Error ? screenshotError.message : String(screenshotError)}`);
-        }
+        const screenshot = await playwrightBrowser.takeScreenshot(sessionID);
+        return screenshot;
       }
 
       case "WAIT":
-        await new Promise((resolve) =>
-          setTimeout(resolve, Number(instruction))
-        );
+        await playwrightBrowser.wait(sessionID, Number(instruction));
         break;
 
       case "NAVBACK":
-        await page.goBack();
+        await playwrightBrowser.goBack(sessionID);
         break;
 
       default:
         throw new Error(`Unknown method: ${method}`);
     }
   } catch (error) {
-    console.error(`Error in runStagehand (${method}):`, error);
-    try {
-      await stagehand.close();
-    } catch (closeError) {
-      console.error("Error closing stagehand:", closeError);
-    }
+    console.error(`Error in runPlaywright (${method}):`, error);
     throw error;
-  } finally {
-    // For methods other than CLOSE, ensure proper cleanup
-    if (method !== "CLOSE") {
-      try {
-        await stagehand.close();
-      } catch (closeError) {
-        console.error("Error in final cleanup:", closeError);
-      }
-    }
   }
 }
 
@@ -204,50 +87,12 @@ async function sendPrompt({
   goal: string;
   sessionID: string;
   previousSteps?: Step[];
-  previousExtraction?: string | ObserveResult[];
+  previousExtraction?: string | any[];
 }) {
   let currentUrl = "";
 
   try {
-    const stagehand = new Stagehand({
-      browserbaseSessionID: sessionID,
-      env: "BROWSERBASE",
-      disablePino: true,
-      useAPI: false,
-      modelName: "claude-3.5-haiku",
-      modelClientOptions: {
-        apiKey: process.env.ANTHROPIC_API_KEY || "",
-      },
-      verbose: 1,
-    });
-    
-    // Add retry logic for initialization
-    let initAttempts = 0;
-    const maxAttempts = 3;
-    
-    while (initAttempts < maxAttempts) {
-      try {
-        await stagehand.init();
-        
-        // Additional wait for browser context
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if (!stagehand.page) {
-          throw new Error("Failed to initialize Stagehand page. Browser context is undefined.");
-        }
-        
-        currentUrl = await stagehand.page.url();
-        await stagehand.close();
-        break; // Success
-        
-      } catch (error) {
-        initAttempts++;
-        if (initAttempts >= maxAttempts) {
-          throw error;
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000 * initAttempts));
-      }
-    }
+    currentUrl = await playwrightBrowser.getCurrentUrl(sessionID);
   } catch (error) {
     console.error("Error getting page info:", error);
   }
@@ -296,7 +141,7 @@ If the goal has been achieved, return "close".`,
   ) {
     content.push({
       type: "image",
-      image: (await runStagehand({
+      image: (await runPlaywright({
         sessionID,
         method: "SCREENSHOT",
       })) as string,
@@ -390,6 +235,26 @@ export async function POST(request: Request) {
 
     // Handle different action types
     switch (action) {
+      case "SCREENSHOT": {
+        try {
+          const screenshot = await runPlaywright({
+            sessionID: sessionId,
+            method: "SCREENSHOT",
+          });
+          
+          return NextResponse.json({
+            success: true,
+            screenshot
+          });
+        } catch (error) {
+          console.error('Screenshot error:', error);
+          return NextResponse.json(
+            { error: "Failed to take screenshot", success: false },
+            { status: 500 }
+          );
+        }
+      }
+
       case "START": {
         if (!goal) {
           return NextResponse.json(
@@ -407,7 +272,7 @@ export async function POST(request: Request) {
           instruction: url,
         };
 
-        await runStagehand({
+        await runPlaywright({
           sessionID: sessionId,
           method: "GOTO",
           instruction: url,
@@ -453,8 +318,8 @@ export async function POST(request: Request) {
           );
         }
 
-        // Execute the step using Stagehand
-        const extraction = await runStagehand({
+        // Execute the step using Playwright
+        const extraction = await runPlaywright({
           sessionID: sessionId,
           method: step.tool,
           instruction: step.instruction,
@@ -496,31 +361,5 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
-  }
-}
-
-async function retryStagehand<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
-  let attempt = 0;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const msg = err?.message || "";
-      if (
-        attempt < maxRetries &&
-        (msg.includes("Failed to parse server response") ||
-          msg.includes("browser context is undefined") ||
-          msg.includes("Target page") ||
-          err?.name === "StagehandResponseParseError")
-      ) {
-        attempt++;
-        const wait = 2000 * attempt;
-        console.warn(`Stagehand transient error, retrying in ${wait}ms... (attempt ${attempt}/${maxRetries})`);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
-      throw err;
-    }
   }
 }

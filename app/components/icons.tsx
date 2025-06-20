@@ -42,6 +42,9 @@ export const Brain = createHydrationSafeIcon(LucideIcons.Brain);
 export const Sparkles = createHydrationSafeIcon(LucideIcons.Sparkles);
 export const ExternalLink = createHydrationSafeIcon(LucideIcons.ExternalLink);
 export const SquarePen = createHydrationSafeIcon(LucideIcons.SquarePen);
+export const Search = createHydrationSafeIcon(LucideIcons.Search);
+export const Activity = createHydrationSafeIcon(LucideIcons.Activity);
+export const ArrowRight = createHydrationSafeIcon(LucideIcons.ArrowRight);
 
 // Re-export the wrapper function for custom icons
 export { createHydrationSafeIcon }; 
