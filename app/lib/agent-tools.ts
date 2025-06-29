@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { promises as fs } from "fs";
 import { join } from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export interface AgentTool {
   name: string;
@@ -10,22 +14,38 @@ export interface AgentTool {
   execute: (params: any) => Promise<any>;
 }
 
+// Define workspace directories
+const WORKSPACE_DIR = join(process.cwd(), "workspace");
+const TODOS_DIR = join(process.cwd(), "todos");
+const PYTHON_SCRIPTS_DIR = join(process.cwd(), "python_scripts");
+
+// Ensure directories exist
+async function ensureDirectories() {
+  for (const dir of [WORKSPACE_DIR, TODOS_DIR, PYTHON_SCRIPTS_DIR]) {
+    try {
+      await fs.access(dir);
+    } catch {
+      await fs.mkdir(dir, { recursive: true });
+    }
+  }
+}
+
 // File System Tools
 const createFileSchema = z.object({
-  path: z.string().describe("File path to create"),
+  path: z.string().describe("File path to create (relative to workspace)"),
   content: z.string().describe("File content"),
 });
 
 const createFolderSchema = z.object({
-  path: z.string().describe("Folder path to create"),
+  path: z.string().describe("Folder path to create (relative to workspace)"),
 });
 
 const readFileSchema = z.object({
-  path: z.string().describe("File path to read"),
+  path: z.string().describe("File path to read (relative to workspace)"),
 });
 
 const listFilesSchema = z.object({
-  path: z.string().optional().describe("Directory path to list (default: current directory)"),
+  path: z.string().optional().describe("Directory path to list (relative to workspace, default: current directory)"),
 });
 
 // Programming Tools
@@ -33,11 +53,17 @@ const generateCodeSchema = z.object({
   language: z.string().describe("Programming language"),
   description: z.string().describe("What the code should do"),
   framework: z.string().optional().describe("Framework to use (if any)"),
+  filename: z.string().optional().describe("Filename to save the code"),
 });
 
 const analyzeCodeSchema = z.object({
   code: z.string().describe("Code to analyze"),
   language: z.string().describe("Programming language"),
+});
+
+const executePythonSchema = z.object({
+  code: z.string().describe("Python code to execute"),
+  description: z.string().optional().describe("Description of what the code does"),
 });
 
 // Todo Management Tools
@@ -74,34 +100,112 @@ const searchWebSchema = z.object({
   maxResults: z.number().optional().default(5),
 });
 
-// In-memory storage for todos (in production, use a database)
-let todos: Array<{
+// Helper functions
+function sanitizePath(inputPath: string): string {
+  // Remove any path traversal attempts
+  return inputPath.replace(/\.\./g, '').replace(/^\/+/, '');
+}
+
+interface TodoItem {
   id: string;
   title: string;
-  description?: string;
-  priority: "low" | "medium" | "high";
-  status: "pending" | "completed";
-  createdAt: Date;
-  dueDate?: Date;
-}> = [];
+  description: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'completed';
+  dueDate: string | null;
+  filename: string;
+}
+
+async function loadTodos(): Promise<TodoItem[]> {
+  try {
+    const todoFiles = await fs.readdir(TODOS_DIR);
+    const todos: TodoItem[] = [];
+    
+    for (const file of todoFiles) {
+      if (file.endsWith('.md')) {
+        const content = await fs.readFile(join(TODOS_DIR, file), 'utf8');
+        const lines = content.split('\n');
+        const title = lines[0]?.replace('# ', '') || 'Untitled';
+        const status = content.includes('- [x]') ? 'completed' : 'pending';
+        const priorityMatch = content.match(/Priority: (low|medium|high)/);
+        const priority = (priorityMatch ? priorityMatch[1] : 'medium') as 'low' | 'medium' | 'high';
+        const dueDateMatch = content.match(/Due Date: (\d{4}-\d{2}-\d{2})/);
+        const dueDate = dueDateMatch ? dueDateMatch[1] : null;
+        const descriptionMatch = content.match(/## Description[\s\S]*?\n\n(.*?)(?=\n##|\n$|$)/);
+        const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+        
+        todos.push({
+          id: file.replace('.md', ''),
+          title,
+          description,
+          priority,
+          status: status as 'pending' | 'completed',
+          dueDate,
+          filename: file,
+        });
+      }
+    }
+    
+    return todos;
+  } catch (error) {
+    console.error('Error loading todos:', error);
+    return [];
+  }
+}
+
+async function saveTodo(todo: TodoItem): Promise<string> {
+  const filename = `${todo.id}.md`;
+  const filePath = join(TODOS_DIR, filename);
+  
+  const markdown = `# ${todo.title}
+
+## Status
+- [${todo.status === 'completed' ? 'x' : ' '}] ${todo.title}
+
+## Priority
+Priority: ${todo.priority}
+
+${todo.dueDate ? `## Due Date\nDue Date: ${todo.dueDate}\n` : ''}
+
+## Description
+
+${todo.description || 'No description provided.'}
+
+## Created
+Created: ${new Date().toISOString()}
+`;
+
+  await fs.writeFile(filePath, markdown, 'utf8');
+  return filename;
+}
 
 export const availableTools: AgentTool[] = [
   // File System Tools
   {
     name: "create_file",
-    description: "Create a new file with specified content",
+    description: "Create a new file with specified content in the workspace",
     category: "filesystem",
     parameters: createFileSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { path, content } = params;
-        // In a real implementation, you'd write to the actual file system
-        // For demo purposes, we'll simulate file creation
+        const sanitizedPath = sanitizePath(path);
+        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        
+        // Ensure parent directory exists
+        const parentDir = join(fullPath, '..');
+        await fs.mkdir(parentDir, { recursive: true });
+        
+        await fs.writeFile(fullPath, content, 'utf8');
+        const stats = await fs.stat(fullPath);
+        
         return {
           success: true,
-          message: `File created at ${path}`,
-          path,
-          size: content.length,
+          message: `File created at workspace/${sanitizedPath}`,
+          path: sanitizedPath,
+          size: stats.size,
+          fullPath,
         };
       } catch (error) {
         return {
@@ -113,16 +217,23 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "create_folder",
-    description: "Create a new folder/directory",
+    description: "Create a new folder/directory in the workspace",
     category: "filesystem",
     parameters: createFolderSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { path } = params;
+        const sanitizedPath = sanitizePath(path);
+        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        
+        await fs.mkdir(fullPath, { recursive: true });
+        
         return {
           success: true,
-          message: `Folder created at ${path}`,
-          path,
+          message: `Folder created at workspace/${sanitizedPath}`,
+          path: sanitizedPath,
+          fullPath,
         };
       } catch (error) {
         return {
@@ -134,17 +245,24 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "read_file",
-    description: "Read content from a file",
+    description: "Read content from a file in the workspace",
     category: "filesystem",
     parameters: readFileSchema,
     execute: async (params) => {
       try {
         const { path } = params;
-        // Simulate file reading
+        const sanitizedPath = sanitizePath(path);
+        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        
+        const content = await fs.readFile(fullPath, 'utf8');
+        const stats = await fs.stat(fullPath);
+        
         return {
           success: true,
-          content: `// Simulated content of ${path}\n// This would contain the actual file content`,
-          path,
+          content,
+          path: sanitizedPath,
+          size: stats.size,
+          lastModified: stats.mtime,
         };
       } catch (error) {
         return {
@@ -156,21 +274,36 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "list_files",
-    description: "List files and folders in a directory",
+    description: "List files and folders in a workspace directory",
     category: "filesystem",
     parameters: listFilesSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { path = "." } = params;
-        // Simulate directory listing
+        const sanitizedPath = sanitizePath(path);
+        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        
+        const entries = await fs.readdir(fullPath, { withFileTypes: true });
+        const files = await Promise.all(
+          entries.map(async (entry) => {
+            const entryPath = join(fullPath, entry.name);
+            const stats = await fs.stat(entryPath);
+            
+            return {
+              name: entry.name,
+              type: entry.isDirectory() ? "directory" : "file",
+              size: entry.isFile() ? stats.size : null,
+              lastModified: stats.mtime,
+            };
+          })
+        );
+        
         return {
           success: true,
-          files: [
-            { name: "package.json", type: "file", size: 1024 },
-            { name: "src", type: "directory" },
-            { name: "README.md", type: "file", size: 2048 },
-          ],
-          path,
+          files,
+          path: sanitizedPath,
+          count: files.length,
         };
       } catch (error) {
         return {
@@ -184,43 +317,136 @@ export const availableTools: AgentTool[] = [
   // Programming Tools
   {
     name: "generate_code",
-    description: "Generate code based on description and requirements",
+    description: "Generate code based on description and requirements, optionally save to workspace",
     category: "programming",
     parameters: generateCodeSchema,
     execute: async (params) => {
       try {
-        const { language, description, framework } = params;
+        const { language, description, framework, filename } = params;
         
-        // Simulate code generation based on language and description
+        // Generate code based on language and description
         let generatedCode = "";
+        let fileExtension = "";
         
         switch (language.toLowerCase()) {
           case "javascript":
           case "js":
-            generatedCode = `// ${description}\nfunction generatedFunction() {\n  // Implementation here\n  console.log("Generated JavaScript code");\n}\n\ngeneratedFunction();`;
+            generatedCode = `// ${description}\n// Generated JavaScript code\n\nfunction main() {\n  // Implementation here\n  console.log("Generated JavaScript code for: ${description}");\n}\n\nif (require.main === module) {\n  main();\n}\n\nmodule.exports = { main };`;
+            fileExtension = ".js";
             break;
           case "python":
-            generatedCode = `# ${description}\ndef generated_function():\n    """Generated Python code"""\n    print("Generated Python code")\n    pass\n\nif __name__ == "__main__":\n    generated_function()`;
+            generatedCode = `# ${description}\n# Generated Python code\n\ndef main():\n    \"\"\"Generated Python code\"\"\"\n    print(f"Generated Python code for: ${description}")\n    # Implementation here\n    pass\n\nif __name__ == "__main__":\n    main()`;
+            fileExtension = ".py";
             break;
           case "typescript":
           case "ts":
-            generatedCode = `// ${description}\ninterface GeneratedInterface {\n  id: string;\n  name: string;\n}\n\nfunction generatedFunction(): GeneratedInterface {\n  return {\n    id: "1",\n    name: "Generated TypeScript code"\n  };\n}`;
+            generatedCode = `// ${description}\n// Generated TypeScript code\n\ninterface Config {\n  description: string;\n}\n\nfunction main(config: Config): void {\n  console.log(\`Generated TypeScript code for: \${config.description}\`);\n  // Implementation here\n}\n\nif (require.main === module) {\n  main({ description: "${description}" });\n}\n\nexport { main };`;
+            fileExtension = ".ts";
+            break;
+          case "html":
+            generatedCode = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${description}</title>\n</head>\n<body>\n  <h1>${description}</h1>\n  <p>Generated HTML content</p>\n  <!-- Add your content here -->\n</body>\n</html>`;
+            fileExtension = ".html";
             break;
           default:
-            generatedCode = `// ${description}\n// Generated code for ${language}\n// Implementation would go here`;
+            generatedCode = `// ${description}\n// Generated code for ${language}\n// Implementation would go here\n\nfunction main() {\n  console.log("Generated ${language} code for: ${description}");\n}\n\nmain();`;
+            fileExtension = ".txt";
         }
 
-        return {
+        const result: any = {
           success: true,
           code: generatedCode,
           language,
           description,
           framework,
         };
+
+        // Optionally save to workspace
+        if (filename) {
+          await ensureDirectories();
+          const fileName = filename.includes('.') ? filename : `${filename}${fileExtension}`;
+          const sanitizedPath = sanitizePath(fileName);
+          const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+          
+          await fs.writeFile(fullPath, generatedCode, 'utf8');
+          result.savedAs = `workspace/${sanitizedPath}`;
+          result.message = `Code generated and saved to workspace/${sanitizedPath}`;
+        } else {
+          result.message = "Code generated successfully";
+        }
+
+        return result;
       } catch (error) {
         return {
           success: false,
           error: `Failed to generate code: ${error}`,
+        };
+      }
+    },
+  },
+  {
+    name: "execute_python",
+    description: "Execute Python code and return the results",
+    category: "programming", 
+    parameters: executePythonSchema,
+    execute: async (params) => {
+      try {
+        await ensureDirectories();
+        const { code, description } = params;
+        
+        // Create a temporary Python file
+        const timestamp = Date.now();
+        const filename = `temp_${timestamp}.py`;
+        const filePath = join(PYTHON_SCRIPTS_DIR, filename);
+        
+        // Add safety wrapper to the code
+                 const wrappedCode = `
+import sys
+import os
+import json
+from datetime import datetime
+import math
+import random
+import re
+
+# Restrict dangerous operations
+def restricted_exec():
+    # Block dangerous imports and operations
+    restricted_modules = ['subprocess', 'os.system', '__import__', 'eval', 'exec', 'open']
+    
+    try:
+${code.split('\n').map((line: string) => '        ' + line).join('\n')}
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return False
+    return True
+
+if __name__ == "__main__":
+    restricted_exec()
+`;
+
+        await fs.writeFile(filePath, wrappedCode, 'utf8');
+        
+        // Execute the Python code with timeout
+        const { stdout, stderr } = await execAsync(`python3 "${filePath}"`, {
+          timeout: 10000, // 10 second timeout
+          cwd: PYTHON_SCRIPTS_DIR,
+        });
+        
+        // Clean up the temporary file
+        await fs.unlink(filePath);
+        
+        return {
+          success: true,
+          output: stdout,
+          error: stderr,
+          description: description || '',
+          executedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to execute Python code: ${error}`,
+          description: description || '',
         };
       }
     },
@@ -234,21 +460,56 @@ export const availableTools: AgentTool[] = [
       try {
         const { code, language } = params;
         
-        // Simulate code analysis
+        // Basic code analysis
+        const lines = code.split('\n');
+        const nonEmptyLines = lines.filter((line: string) => line.trim().length > 0);
+        const commentLines = lines.filter((line: string) => {
+          const trimmed = line.trim();
+          return trimmed.startsWith('//') || trimmed.startsWith('#') || 
+                 trimmed.startsWith('/*') || trimmed.startsWith('*');
+        });
+        
+        interface CodeIssue {
+          type: string;
+          message: string;
+          severity?: string;
+        }
+        
         const analysis = {
-          linesOfCode: code.split('\n').length,
-          complexity: "Medium",
-          suggestions: [
-            "Consider adding error handling",
-            "Add type annotations for better code clarity",
-            "Consider breaking down large functions",
-          ],
-          issues: [
-            { type: "warning", message: "Unused variable detected", line: 5 },
-            { type: "info", message: "Consider using const instead of let", line: 3 },
-          ],
+          linesOfCode: lines.length,
+          nonEmptyLines: nonEmptyLines.length,
+          commentLines: commentLines.length,
+          commentPercentage: Math.round((commentLines.length / nonEmptyLines.length) * 100) || 0,
+          complexity: nonEmptyLines.length > 50 ? "High" : nonEmptyLines.length > 20 ? "Medium" : "Low",
+          suggestions: [] as string[],
+          issues: [] as CodeIssue[],
         };
 
+        // Language-specific analysis
+        if (language.toLowerCase() === 'python') {
+          if (code.includes('eval(') || code.includes('exec(')) {
+            analysis.issues.push({ type: "security", message: "Use of eval() or exec() detected - potential security risk", severity: "high" });
+          }
+          if (!code.includes('def ')) {
+            analysis.suggestions.push("Consider organizing code into functions for better structure");
+          }
+          if (commentLines.length === 0 && nonEmptyLines.length > 10) {
+            analysis.suggestions.push("Add comments to explain complex logic");
+          }
+        } else if (language.toLowerCase().includes('javascript') || language.toLowerCase().includes('typescript')) {
+          if (code.includes('var ')) {
+            analysis.suggestions.push("Consider using 'let' or 'const' instead of 'var'");
+          }
+          if (code.includes('==') && !code.includes('===')) {
+            analysis.suggestions.push("Consider using '===' for strict equality comparison");
+          }
+        }
+
+        // General suggestions
+        if (analysis.commentPercentage < 10 && nonEmptyLines.length > 20) {
+          analysis.suggestions.push("Consider adding more comments for better code documentation");
+        }
+        
         return {
           success: true,
           analysis,
@@ -267,29 +528,33 @@ export const availableTools: AgentTool[] = [
   // Todo Management Tools
   {
     name: "create_todo",
-    description: "Create a new todo item",
+    description: "Create a new todo item and save as markdown file",
     category: "productivity",
     parameters: createTodoSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { title, description, priority, dueDate } = params;
         
-        const newTodo = {
-          id: Date.now().toString(),
+        const newTodo: TodoItem = {
+          id: `todo_${Date.now()}`,
           title,
-          description,
+          description: description || '',
           priority,
-          status: "pending" as const,
-          createdAt: new Date(),
-          dueDate: dueDate ? new Date(dueDate) : undefined,
+          status: "pending",
+          dueDate,
+          filename: '', // Will be set after saving
         };
         
-        todos.push(newTodo);
+        const filename = await saveTodo(newTodo);
+        newTodo.filename = filename;
         
         return {
           success: true,
           todo: newTodo,
-          message: `Todo "${title}" created successfully`,
+          filename,
+          message: `Todo "${title}" created and saved as ${filename}`,
+          path: `todos/${filename}`,
         };
       } catch (error) {
         return {
@@ -301,14 +566,17 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "list_todos",
-    description: "List all todos with optional status filter",
+    description: "List all todos from markdown files with optional status filter",
     category: "productivity",
     parameters: listTodosSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { status } = params;
         
+        const todos = await loadTodos();
         let filteredTodos = todos;
+        
         if (status !== "all") {
           filteredTodos = todos.filter(todo => todo.status === status);
         }
@@ -318,6 +586,7 @@ export const availableTools: AgentTool[] = [
           todos: filteredTodos,
           count: filteredTodos.length,
           totalCount: todos.length,
+          todosDirectory: "todos/",
         };
       } catch (error) {
         return {
@@ -329,27 +598,33 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "update_todo",
-    description: "Update an existing todo item",
+    description: "Update an existing todo item in its markdown file",
     category: "productivity",
     parameters: updateTodoSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { id, ...updates } = params;
         
-        const todoIndex = todos.findIndex(todo => todo.id === id);
-        if (todoIndex === -1) {
+        const todos = await loadTodos();
+        const todo = todos.find(t => t.id === id);
+        
+        if (!todo) {
           return {
             success: false,
             error: `Todo with ID ${id} not found`,
           };
         }
         
-        todos[todoIndex] = { ...todos[todoIndex], ...updates };
+        // Update todo properties
+        const updatedTodo = { ...todo, ...updates };
+        await saveTodo(updatedTodo);
         
         return {
           success: true,
-          todo: todos[todoIndex],
+          todo: updatedTodo,
           message: `Todo updated successfully`,
+          path: `todos/${updatedTodo.filename}`,
         };
       } catch (error) {
         return {
@@ -377,6 +652,7 @@ export const availableTools: AgentTool[] = [
           formatted: now.toLocaleString("en-US", { timeZone: timezone }),
           timezone,
           unix: Math.floor(now.getTime() / 1000),
+          localTime: now.toLocaleString(),
         };
       } catch (error) {
         return {
@@ -388,22 +664,81 @@ export const availableTools: AgentTool[] = [
   },
   {
     name: "calculate",
-    description: "Perform mathematical calculations",
+    description: "Perform mathematical calculations using Python",
     category: "utility",
     parameters: calculateSchema,
     execute: async (params) => {
       try {
+        await ensureDirectories();
         const { expression } = params;
         
-        // Simple calculator - in production, use a proper math parser
-        const sanitizedExpression = expression.replace(/[^0-9+\-*/().\s]/g, '');
-        const result = eval(sanitizedExpression);
+        // Create safe Python calculation code
+        const pythonCode = `
+import math
+import operator
+
+# Safe calculation function
+def safe_calculate(expression):
+    # Allow only safe mathematical operations
+    allowed_chars = set('0123456789+-*/().%** ')
+    if not all(c in allowed_chars or c.isalnum() for c in expression):
+        return "Error: Invalid characters in expression"
+    
+    # Replace some common math functions
+    safe_expression = expression.replace('^', '**')
+    
+    try:
+        # Use eval with restricted globals for safety
+        allowed_names = {
+            "__builtins__": {},
+            "math": math,
+            "abs": abs,
+            "round": round,
+            "min": min,
+            "max": max,
+            "sum": sum,
+            "pow": pow,
+        }
+        result = eval(safe_expression, allowed_names)
+        return result
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+result = safe_calculate("${expression}")
+print(f"Expression: ${expression}")
+print(f"Result: {result}")
+print(f"Type: {type(result).__name__}")
+`;
+
+        // Execute Python calculation
+        const timestamp = Date.now();
+        const filename = `calc_${timestamp}.py`;
+        const filePath = join(PYTHON_SCRIPTS_DIR, filename);
+        
+        await fs.writeFile(filePath, pythonCode, 'utf8');
+        
+        const { stdout, stderr } = await execAsync(`python3 "${filePath}"`, {
+          timeout: 5000, // 5 second timeout
+          cwd: PYTHON_SCRIPTS_DIR,
+        });
+        
+        await fs.unlink(filePath);
+        
+        // Parse the output
+        const lines = stdout.trim().split('\n');
+        const resultLine = lines.find(line => line.startsWith('Result: '));
+        const typeLine = lines.find(line => line.startsWith('Type: '));
+        
+        const result = resultLine ? resultLine.replace('Result: ', '') : 'Unknown';
+        const resultType = typeLine ? typeLine.replace('Type: ', '') : 'unknown';
         
         return {
-          success: true,
+          success: !stderr && !result.startsWith('Error:'),
           expression,
-          result,
-          type: typeof result,
+          result: result.startsWith('Error:') ? null : result,
+          type: resultType,
+          output: stdout,
+          error: stderr || (result.startsWith('Error:') ? result : null),
         };
       } catch (error) {
         return {
@@ -447,6 +782,7 @@ export const availableTools: AgentTool[] = [
           query,
           results: simulatedResults,
           count: simulatedResults.length,
+          note: "This is a simulated web search. Implement actual web search API for real results.",
         };
       } catch (error) {
         return {

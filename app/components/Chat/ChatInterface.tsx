@@ -50,12 +50,27 @@ export default function ChatInterface({
     scrollToBottom();
   }, [session.messages, agentState.steps]);
 
+  // Reset initialization when session changes
   useEffect(() => {
+    initializationRef.current = false;
+    setIsLoading(false);
+    setIsAgentFinished(false);
+    setAgentState({
+      sessionId: null,
+      sessionUrl: null,
+      steps: [],
+      isLoading: false,
+    });
+  }, [session.id]);
+
+  useEffect(() => {
+    console.log("ChatInterface: Messages changed, length:", session.messages.length, "initialized:", initializationRef.current);
     if (session.messages.length > 0 && !initializationRef.current) {
+      console.log("ChatInterface: Starting browser session");
       initializationRef.current = true;
       startBrowserSession();
     }
-  }, [session.messages]);
+  }, [session.messages, session.id]); // Add session.id as dependency
 
   const startBrowserSession = async () => {
     const lastUserMessage = session.messages
@@ -81,6 +96,18 @@ export default function ChatInterface({
       const sessionData = await sessionResponse.json();
       if (!sessionData.success) {
         throw new Error(sessionData.error || "Failed to create session");
+      }
+
+      // Show mock mode warning if applicable
+      if (sessionData.mock) {
+        console.warn("Running in mock mode - Browserbase not configured");
+        const warningMessage: Message = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: "⚠️ Running in demo mode. To use full browser automation features, please configure Browserbase API keys in settings.",
+          role: "assistant",
+          timestamp: new Date(),
+        };
+        onAddMessage(session.id, warningMessage);
       }
 
       setContextId(sessionData.contextId);
@@ -133,7 +160,7 @@ export default function ChatInterface({
     } catch (error) {
       console.error("Browser session error:", error);
       const errorMessage: Message = {
-        id: Date.now().toString(),
+        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         content: "Sorry, I encountered an error while trying to help you. Please try again.",
         role: "assistant",
         timestamp: new Date(),
@@ -184,7 +211,7 @@ export default function ChatInterface({
           
           // Add completion message
           const completionMessage: Message = {
-            id: Date.now().toString(),
+            id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             content: `Task completed! I've successfully executed ${steps.length} steps to help you with: "${goal}"`,
             role: "assistant",
             timestamp: new Date(),

@@ -10,10 +10,20 @@ import { useChatSessions } from "../hooks/useChatSessions";
 import { useSettings } from "../hooks/useSettings";
 import { useModels } from "../hooks/useModels";
 import { Message } from "../types";
+import { generateMessageId } from "../lib/utils";
 
 export default function ClientApp() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasSkippedInitialSettings, setHasSkippedInitialSettings] = useState(false);
+
+  // Load skipped settings state on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const skipped = localStorage.getItem('hasSkippedInitialSettings') === 'true';
+      setHasSkippedInitialSettings(skipped);
+    }
+  }, []);
   
   const {
     sessions,
@@ -36,7 +46,7 @@ export default function ClientApp() {
     isLoading: settingsLoading,
   } = useSettings();
 
-  const { models, isLoading: modelsLoading, error: modelsError } = useModels();
+  const { models, isLoading: modelsLoading, error: modelsError, refetchModels } = useModels();
 
   const [selectedModel, setSelectedModel] = useState(settings.defaultModel);
 
@@ -48,33 +58,45 @@ export default function ClientApp() {
     }
   }, [models, selectedModel, settings.defaultModel]);
 
-  // Update models when settings change
+  // Refetch models when providers are enabled (without causing infinite loop)
   useEffect(() => {
-    if (getEnabledProviders().length > 0) {
-      // Trigger models refresh when providers are configured
-      window.location.reload();
+    const enabledProviders = getEnabledProviders();
+    if (enabledProviders.length > 0 && models.length === 0 && !modelsLoading) {
+      refetchModels();
     }
-  }, [settings.providers]);
+  }, [getEnabledProviders().length, models.length, modelsLoading, refetchModels]);
+
+  // Reset skip state when providers are configured
+  useEffect(() => {
+    const enabledProviders = getEnabledProviders();
+    if (enabledProviders.length > 0 && hasSkippedInitialSettings) {
+      setHasSkippedInitialSettings(false);
+      localStorage.removeItem('hasSkippedInitialSettings');
+    }
+  }, [getEnabledProviders().length, hasSkippedInitialSettings]);
 
   const handleNewChat = () => {
     setCurrentSessionId(null);
   };
 
   const handleStartChat = (message: string, model: string, selectedTools: string[] = []) => {
-    const session = createSession(
-      message.length > 50 ? message.substring(0, 50) + "..." : message,
-      model,
-      selectedTools
-    );
-
+    console.log("Starting chat with:", { message, model, selectedTools });
+    
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: generateMessageId(),
       content: message,
       role: "user",
       timestamp: new Date(),
     };
 
-    addMessage(session.id, userMessage);
+    const session = createSession(
+      message.length > 50 ? message.substring(0, 50) + "..." : message,
+      model,
+      selectedTools,
+      userMessage // Pass the initial message
+    );
+
+    console.log("Created session with initial message:", session.id);
   };
 
   const handleSessionSelect = (sessionId: string) => {
@@ -86,6 +108,12 @@ export default function ClientApp() {
   };
 
   const currentSession = getCurrentSession();
+  
+  // Debug: Log current session state
+  useEffect(() => {
+    console.log("Current session changed:", currentSession ? currentSession.id : "null");
+    console.log("Current session object:", currentSession);
+  }, [currentSession]);
 
   if (sessionsLoading || settingsLoading) {
     return (
@@ -95,9 +123,9 @@ export default function ClientApp() {
     );
   }
 
-  // Show settings modal if no providers are configured
+  // Show settings modal if no providers are configured and user hasn't skipped
   const enabledProviders = getEnabledProviders();
-  const shouldShowSettings = enabledProviders.length === 0 && !isSettingsOpen;
+  const shouldShowSettings = enabledProviders.length === 0 && !hasSkippedInitialSettings;
 
   return (
     <div className="h-screen flex bg-background">
@@ -115,29 +143,39 @@ export default function ClientApp() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {currentSession ? (
-          <ChatInterface
-            session={currentSession}
-            onUpdateSession={updateSession}
-            onAddMessage={addMessage}
-          />
-        ) : (
-          <WelcomeScreen
-            onStartChat={handleStartChat}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-          />
-        )}
+        {(() => {
+          console.log("Rendering main content. Current session:", currentSession ? currentSession.id : "null");
+          return currentSession ? (
+            <ChatInterface
+              session={currentSession}
+              onUpdateSession={updateSession}
+              onAddMessage={addMessage}
+            />
+          ) : (
+            <WelcomeScreen
+              onStartChat={handleStartChat}
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+            />
+          );
+        })()}
       </div>
 
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen || shouldShowSettings}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          if (shouldShowSettings) {
+            setHasSkippedInitialSettings(true);
+            localStorage.setItem('hasSkippedInitialSettings', 'true');
+          }
+        }}
         settings={settings}
         onUpdateSettings={updateSettings}
         onExportSettings={exportSettings}
         onImportSettings={importSettings}
+        showSkipOption={shouldShowSettings}
       />
     </div>
   );

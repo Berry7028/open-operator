@@ -78,6 +78,13 @@ export default function WelcomeScreen({
           <p className="text-lg text-muted-foreground font-ppsupply">
             AI Agent with powerful tools for web browsing, programming, and productivity
           </p>
+          
+          {/* Environment Status */}
+          <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <p className="text-sm text-yellow-600 font-ppsupply">
+              🛠️ Demo Mode: Full browser automation requires Browserbase configuration
+            </p>
+          </div>
         </div>
 
         {/* Model Selection */}

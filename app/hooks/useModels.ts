@@ -13,28 +13,28 @@ export function useModels() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch('/api/models');
-        const data: ModelsResponse = await response.json();
-        
-        if (data.success) {
-          setModels(data.models);
-          setProviders(data.providers);
-          setError(null);
-        } else {
-          setError('Failed to fetch models');
-        }
-      } catch (err) {
-        setError('Network error while fetching models');
-        console.error('Error fetching models:', err);
-      } finally {
-        setIsLoading(false);
+  const fetchModels = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/models');
+      const data: ModelsResponse = await response.json();
+      
+      if (data.success) {
+        setModels(data.models);
+        setProviders(data.providers);
+        setError(null);
+      } else {
+        setError('Failed to fetch models');
       }
-    };
+    } catch (err) {
+      setError('Network error while fetching models');
+      console.error('Error fetching models:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchModels();
   }, []);
 
@@ -60,5 +60,6 @@ export function useModels() {
     error,
     getModelsByProvider,
     getEnabledProviders,
+    refetchModels: fetchModels,
   };
 }

@@ -62,6 +62,62 @@ async function runStagehand({
     | "NAVBACK";
   instruction?: string;
 }) {
+  // Check if we're in mock mode (session ID starts with mock- or fallback-)
+  if (sessionID.startsWith('mock-') || sessionID.startsWith('fallback-')) {
+    console.log(`Mock Stagehand: ${method} - ${instruction}`);
+    
+    // Return mock responses for different methods
+    switch (method) {
+      case "GOTO":
+        return { success: true, message: `Navigated to ${instruction}` };
+      
+      case "ACT":
+        return { success: true, message: `Performed action: ${instruction}` };
+      
+      case "EXTRACT":
+        return { 
+          success: true, 
+          data: `Extracted information from page about: ${instruction}`,
+          mockData: true 
+        };
+      
+      case "OBSERVE":
+        return [
+          { 
+            id: 1, 
+            selector: "body", 
+            description: `Mock observation: ${instruction}`, 
+            action: "click" 
+          }
+        ];
+      
+      case "SCREENSHOT":
+        return "mock-screenshot-data";
+      
+      case "WAIT":
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(Number(instruction), 1000)) // Max 1 second in mock mode
+        );
+        break;
+      
+      case "NAVBACK":
+        return { success: true, message: "Navigated back" };
+      
+      case "CLOSE":
+        return { success: true, message: "Session closed" };
+      
+      default:
+        return { success: true, message: `Mock ${method} completed` };
+    }
+    return;
+  }
+
+  // Check if Browserbase is properly configured
+  if (!process.env.BROWSERBASE_API_KEY || process.env.BROWSERBASE_API_KEY === 'your_browserbase_api_key_here') {
+    console.warn("Browserbase not configured, using mock mode");
+    return runStagehand({ sessionID: 'mock-' + sessionID, method, instruction });
+  }
+
   const stagehand = new Stagehand({
     browserbaseSessionID: sessionID,
     env: "BROWSERBASE",
@@ -156,26 +212,34 @@ async function sendPrompt({
     : availableTools;
 
   const toolsDescription = enabledTools.length > 0 
-    ? `\n\nAvailable Tools:
-You can use the following tools by setting tool to "CALL_TOOL" and providing the tool name and parameters in the instruction field as JSON:
+    ? `\n\nAvailable Local Tools (PREFERRED):
+ALWAYS prioritize using local tools over web browsing when possible. Use CALL_TOOL for these tasks:
 
 ${enabledTools.map(tool => 
   `- ${tool.name}: ${tool.description} (Category: ${tool.category})`
 ).join('\n')}
 
-To use a tool, set:
+To use a tool (PREFERRED METHOD):
 - tool: "CALL_TOOL"
 - instruction: JSON string with format: {"toolName": "tool_name", "params": {...}}
 
-Example: {"toolName": "create_todo", "params": {"title": "Complete project", "priority": "high"}}`
+Examples:
+- Calculations: {"toolName": "calculate", "params": {"expression": "2+3*4"}}
+- Create Todo: {"toolName": "create_todo", "params": {"title": "Complete project", "priority": "high"}}
+- Write code: {"toolName": "generate_code", "params": {"language": "python", "description": "sort a list"}}
+- Execute Python: {"toolName": "execute_python", "params": {"code": "print(sum([1,2,3,4,5]))"}}
+- File operations: {"toolName": "create_file", "params": {"path": "hello.txt", "content": "Hello World"}}`
     : '';
 
+  const shouldUseBrowser = previousSteps.some(step => step.tool === "GOTO") || currentUrl;
+  
   const content: UserContent = [
     {
       type: "text",
-      text: `Consider the following screenshot of a web page${
-        currentUrl ? ` (URL: ${currentUrl})` : ""
-      }, with the goal being "${goal}".
+      text: `Goal: "${goal}"
+
+${shouldUseBrowser ? `Current web page context (URL: ${currentUrl || 'unknown'})` : 'Working with local tools and files'}
+
 ${
   previousSteps.length > 0
     ? `Previous steps taken:
@@ -187,25 +251,29 @@ Step ${index + 1}:
 - Reasoning: ${step.reasoning}
 - Tool Used: ${step.tool}
 - Instruction: ${step.instruction}
+${step.tool === 'CALL_TOOL' ? '- Result: Tool executed successfully' : ''}
 `
   )
   .join("\n")}`
     : ""
 }
-Determine the immediate next step to take to achieve the goal. 
 
-Important guidelines:
-1. Break down complex actions into individual atomic steps
-2. For ACT commands, use only one action at a time, such as:
-   - Single click on a specific element
-   - Type into a single input field
-   - Select a single option
-3. Avoid combining multiple actions in one instruction
-4. If multiple actions are needed, they should be separate steps
-5. You can use external tools when appropriate for the task
-6. Consider using tools for file operations, programming tasks, calculations, etc.
+PRIORITY GUIDELINES:
+1. **ALWAYS USE LOCAL TOOLS FIRST** - For calculations, file operations, programming, todos, etc.
+2. **Only use web browsing** when you need to search for information, visit specific websites, or interact with web applications
+3. **For mathematical calculations** - use the "calculate" tool
+4. **For programming tasks** - use "generate_code" or "execute_python" tools
+5. **For file management** - use "create_file", "read_file", "create_folder" tools
+6. **For todo management** - use "create_todo", "list_todos", "update_todo" tools
 
-If the goal has been achieved, return "close".${toolsDescription}`,
+Determine the immediate next step to achieve the goal.
+
+${shouldUseBrowser ? 'If continuing with web interaction:' : 'Choose the most appropriate tool or action:'}
+- Break down complex actions into atomic steps
+- Use local tools whenever possible
+- Only navigate to websites when absolutely necessary
+
+If the goal has been achieved, return "CLOSE".${toolsDescription}`,
     },
   ];
 
@@ -261,6 +329,65 @@ If the goal has been achieved, return "close".${toolsDescription}`,
     result: result.object,
     previousSteps: [...previousSteps, result.object],
   };
+}
+
+async function analyzeGoalForTools(goal: string, modelId: string, selectedTools: string[] = []): Promise<{
+  useTools: boolean;
+  toolName?: string;
+  params?: any;
+  reasoning: string;
+}> {
+  const enabledTools = selectedTools.length > 0 
+    ? availableTools.filter(tool => selectedTools.includes(tool.name))
+    : availableTools;
+
+  const message: CoreMessage = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: `Analyze this goal: "${goal}"
+
+Available local tools:
+${enabledTools.map(tool => 
+  `- ${tool.name}: ${tool.description} (Category: ${tool.category})`
+).join('\n')}
+
+Determine if this goal can be accomplished using local tools instead of web browsing.
+
+Examples of tasks that should use tools:
+- Mathematical calculations → use "calculate" tool
+- Creating todos or task lists → use "create_todo" tool  
+- Writing or generating code → use "generate_code" tool
+- Running Python code → use "execute_python" tool
+- File operations (create, read, edit files) → use file tools
+- Data processing or analysis → use programming tools
+
+Examples of tasks that need web browsing:
+- Searching for current information online
+- Visiting specific websites
+- Online shopping or booking
+- Social media interactions
+- Accessing web applications
+
+If this goal can be solved with tools, suggest the first tool to use and its parameters.
+If it requires web browsing, explain why.`,
+      },
+    ],
+  };
+
+  const result = await generateObject({
+    model: getModelClient(modelId),
+    schema: z.object({
+      useTools: z.boolean(),
+      toolName: z.string().optional(),
+      params: z.record(z.any()).optional(),
+      reasoning: z.string(),
+    }),
+    messages: [message],
+  });
+
+  return result.object;
 }
 
 async function selectStartingUrl(goal: string, modelId: string = "claude-3-5-sonnet-20241022") {
@@ -325,27 +452,50 @@ export async function POST(request: Request) {
           );
         }
 
-        // Handle first step with URL selection
-        const { url, reasoning } = await selectStartingUrl(goal, modelId);
-        const firstStep = {
-          text: `Navigating to ${url}`,
-          reasoning,
-          tool: "GOTO" as const,
-          instruction: url,
-        };
+        // Analyze if this goal can be solved with tools instead of browser
+        const canUseTools = await analyzeGoalForTools(goal, modelId, selectedTools);
+        
+        if (canUseTools.useTools) {
+          // Start with tool-based approach
+          const firstStep = {
+            text: canUseTools.reasoning,
+            reasoning: `This task can be accomplished using local tools: ${canUseTools.toolName}`,
+            tool: "CALL_TOOL" as const,
+            instruction: JSON.stringify({
+              toolName: canUseTools.toolName,
+              params: canUseTools.params
+            }),
+          };
 
-        await runStagehand({
-          sessionID: sessionId,
-          method: "GOTO",
-          instruction: url,
-        });
+          return NextResponse.json({
+            success: true,
+            result: firstStep,
+            steps: [firstStep],
+            done: false,
+          });
+        } else {
+          // Fallback to browser-based approach
+          const { url, reasoning } = await selectStartingUrl(goal, modelId);
+          const firstStep = {
+            text: `Navigating to ${url}`,
+            reasoning,
+            tool: "GOTO" as const,
+            instruction: url,
+          };
 
-        return NextResponse.json({
-          success: true,
-          result: firstStep,
-          steps: [firstStep],
-          done: false,
-        });
+          await runStagehand({
+            sessionID: sessionId,
+            method: "GOTO",
+            instruction: url,
+          });
+
+          return NextResponse.json({
+            success: true,
+            result: firstStep,
+            steps: [firstStep],
+            done: false,
+          });
+        }
       }
 
       case "GET_NEXT_STEP": {

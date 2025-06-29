@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ChatSession, Message } from '../types';
+import { generateSessionId } from '../lib/utils';
 
 export function useChatSessions() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -38,26 +39,31 @@ export function useChatSessions() {
     }
   };
 
-  const createSession = (title: string, model: string, selectedTools: string[] = []): ChatSession => {
+  const createSession = (title: string, model: string, selectedTools: string[] = [], initialMessage?: Message): ChatSession => {
     const newSession: ChatSession = {
-      id: Date.now().toString(),
+      id: generateSessionId(),
       title,
-      messages: [],
+      messages: initialMessage ? [initialMessage] : [],
       model,
       selectedTools,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
+    console.log("Creating new session:", newSession.id, "with", initialMessage ? "initial message" : "no messages");
+    
     const newSessions = [newSession, ...sessions];
     setSessions(newSessions);
     saveSessions(newSessions);
     setCurrentSessionId(newSession.id);
     
+    console.log("Set current session ID to:", newSession.id);
+    
     return newSession;
   };
 
   const updateSession = (sessionId: string, updates: Partial<ChatSession>) => {
+    console.log("Updating session:", sessionId, "with:", Object.keys(updates));
     const newSessions = sessions.map(session =>
       session.id === sessionId
         ? { ...session, ...updates, updatedAt: new Date() }
@@ -65,6 +71,7 @@ export function useChatSessions() {
     );
     setSessions(newSessions);
     saveSessions(newSessions);
+    console.log("Session updated successfully");
   };
 
   const deleteSession = (sessionId: string) => {
@@ -78,8 +85,18 @@ export function useChatSessions() {
   };
 
   const addMessage = (sessionId: string, message: Message) => {
+    console.log("Adding message to session:", sessionId, message.content);
+    console.log("Available sessions:", sessions.map(s => s.id));
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) {
+      console.error("Session not found:", sessionId);
+      console.error("Available sessions:", sessions);
+      console.error("Current session ID:", currentSessionId);
+      return;
+    }
+    
     updateSession(sessionId, {
-      messages: [...(sessions.find(s => s.id === sessionId)?.messages || []), message],
+      messages: [...session.messages, message],
     });
   };
 

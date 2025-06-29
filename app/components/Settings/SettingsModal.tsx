@@ -37,6 +37,7 @@ interface SettingsModalProps {
   onUpdateSettings: (settings: Partial<AppSettings>) => void;
   onExportSettings: () => void;
   onImportSettings: (file: File) => Promise<void>;
+  showSkipOption?: boolean;
 }
 
 export default function SettingsModal({
@@ -46,6 +47,7 @@ export default function SettingsModal({
   onUpdateSettings,
   onExportSettings,
   onImportSettings,
+  showSkipOption = false,
 }: SettingsModalProps) {
   const [importError, setImportError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
@@ -194,6 +196,25 @@ export default function SettingsModal({
                   </CardContent>
                 </Card>
               ))}
+
+              {showSkipOption && (
+                <Card className="bg-yellow-500/10 border-yellow-500/30">
+                  <CardContent className="pt-6">
+                    <div className="text-center space-y-3">
+                      <p className="text-sm text-muted-foreground font-ppsupply">
+                        You can skip the initial setup and configure providers later from the sidebar settings.
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={onClose}
+                        className="font-ppsupply border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/20"
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
 
