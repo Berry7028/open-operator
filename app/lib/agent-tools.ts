@@ -446,7 +446,7 @@ if __name__ == "__main__":
         return {
           success: false,
           error: `Failed to execute Python code: ${error}`,
-          description: description || '',
+          description: params.description || '',
         };
       }
     },
@@ -668,9 +668,10 @@ if __name__ == "__main__":
     category: "utility",
     parameters: calculateSchema,
     execute: async (params) => {
+      await ensureDirectories();
+      const { expression } = params;
+      
       try {
-        await ensureDirectories();
-        const { expression } = params;
         
         // Create safe Python calculation code
         const pythonCode = `

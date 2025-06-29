@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
-import { google } from "@ai-sdk/google";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
@@ -15,26 +15,30 @@ const getModelClient = (modelId: string): LanguageModelV1 => {
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
-    return openai(modelId, { apiKey });
+    const provider = createOpenAI({ apiKey });
+    return provider(modelId);
   } else if (modelId.startsWith('claude-')) {
     const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
     if (!apiKey) {
       throw new Error('Anthropic API key not configured');
     }
-    return anthropic(modelId, { apiKey });
+    const provider = createAnthropic({ apiKey });
+    return provider(modelId);
   } else if (modelId.startsWith('gemini-')) {
     const apiKey = getSessionApiKey('GOOGLE_AI_API_KEY');
     if (!apiKey) {
       throw new Error('Google AI API key not configured');
     }
-    return google(modelId, { apiKey });
+    const provider = createGoogleGenerativeAI({ apiKey });
+    return provider(modelId);
   } else {
     // Default fallback
     const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
     if (!apiKey) {
       throw new Error('No API keys configured');
     }
-    return anthropic("claude-3-5-sonnet-20241022", { apiKey });
+    const provider = createAnthropic({ apiKey });
+    return provider("claude-3-5-sonnet-20241022");
   }
 };
 
