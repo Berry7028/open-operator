@@ -103,6 +103,7 @@ export default function ChatInterface({
         body: JSON.stringify({
           goal: lastUserMessage.content,
           sessionId: sessionData.sessionId,
+          modelId: session.model,
           action: "START",
         }),
       });
@@ -154,6 +155,7 @@ export default function ChatInterface({
             goal,
             sessionId,
             previousSteps: steps,
+            modelId: session.model,
             action: "GET_NEXT_STEP",
           }),
         });

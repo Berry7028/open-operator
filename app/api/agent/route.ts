@@ -1,10 +1,33 @@
 import { NextResponse } from "next/server";
 import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
 
-const LLMClient = anthropic("claude-3-7-sonnet-latest");
+// Initialize LLM clients based on available API keys
+const getModelClient = (modelId: string): LanguageModelV1 => {
+  if (modelId.startsWith('gpt-')) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+    return openai(modelId);
+  } else if (modelId.startsWith('claude-')) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('Anthropic API key not configured');
+    }
+    return anthropic(modelId);
+  } else if (modelId.startsWith('gemini-')) {
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      throw new Error('Google AI API key not configured');
+    }
+    return google(modelId);
+  } else {
+    // Default fallback
+    return anthropic("claude-3-5-sonnet-20241022");
+  }
+};
 
 type Step = {
   text: string;
@@ -92,11 +115,13 @@ async function sendPrompt({
   sessionID,
   previousSteps = [],
   previousExtraction,
+  modelId = "claude-3-5-sonnet-20241022",
 }: {
   goal: string;
   sessionID: string;
   previousSteps?: Step[];
   previousExtraction?: string | ObserveResult[];
+  modelId?: string;
 }) {
   let currentUrl = "";
 
@@ -180,7 +205,7 @@ If the goal has been achieved, return "close".`,
   };
 
   const result = await generateObject({
-    model: LLMClient as LanguageModelV1,
+    model: getModelClient(modelId),
     schema: z.object({
       text: z.string(),
       reasoning: z.string(),
@@ -204,7 +229,7 @@ If the goal has been achieved, return "close".`,
   };
 }
 
-async function selectStartingUrl(goal: string) {
+async function selectStartingUrl(goal: string, modelId: string = "claude-3-5-sonnet-20241022") {
   const message: CoreMessage = {
     role: "user",
     content: [
@@ -222,7 +247,7 @@ Return a URL that would be most effective for achieving this goal.`,
   };
 
   const result = await generateObject({
-    model: LLMClient as LanguageModelV1,
+    model: getModelClient(modelId),
     schema: z.object({
       url: z.string().url(),
       reasoning: z.string(),
@@ -240,7 +265,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { goal, sessionId, previousSteps = [], action } = body;
+    const { goal, sessionId, previousSteps = [], action, modelId } = body;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -260,7 +285,7 @@ export async function POST(request: Request) {
         }
 
         // Handle first step with URL selection
-        const { url, reasoning } = await selectStartingUrl(goal);
+        const { url, reasoning } = await selectStartingUrl(goal, modelId);
         const firstStep = {
           text: `Navigating to ${url}`,
           reasoning,
@@ -295,6 +320,7 @@ export async function POST(request: Request) {
           goal,
           sessionID: sessionId,
           previousSteps,
+          modelId,
         });
 
         return NextResponse.json({

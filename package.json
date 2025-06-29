@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.11",
+    "@ai-sdk/google": "^1.0.9",
+    "@ai-sdk/openai": "^1.0.8",
     "@browserbasehq/sdk": "^2.0.0",
     "@browserbasehq/stagehand": "^2.2.1",
     "@vercel/analytics": "^1.4.1",
