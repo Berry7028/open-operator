@@ -1,9 +1,32 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef } from "react";
 import { AppSettings } from "../../types";
 import { LLM_PROVIDERS } from "../../constants/llm-providers";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -22,7 +45,6 @@ export default function SettingsModal({
   onExportSettings,
   onImportSettings,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'providers' | 'general'>('providers');
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,219 +72,173 @@ export default function SettingsModal({
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <motion.div
-            className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-gray-700"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-700">
-              <h2 className="text-xl font-ppneue text-gray-100">Settings</h2>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-400 hover:text-gray-200"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="font-ppneue">Settings</DialogTitle>
+        </DialogHeader>
 
-            <div className="flex h-[600px]">
-              {/* Sidebar */}
-              <div className="w-64 bg-gray-750 border-r border-gray-700 p-4">
-                <nav className="space-y-2">
-                  <button
-                    onClick={() => setActiveTab('providers')}
-                    className={`w-full text-left px-3 py-2 rounded-lg font-ppsupply transition-colors ${
-                      activeTab === 'providers'
-                        ? 'bg-blue-900/50 text-blue-300'
-                        : 'hover:bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    LLM Providers
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('general')}
-                    className={`w-full text-left px-3 py-2 rounded-lg font-ppsupply transition-colors ${
-                      activeTab === 'general'
-                        ? 'bg-blue-900/50 text-blue-300'
-                        : 'hover:bg-gray-700 text-gray-300'
-                    }`}
-                  >
-                    General
-                  </button>
-                </nav>
+        <Tabs defaultValue="providers" className="h-[600px]">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="providers" className="font-ppsupply">LLM Providers</TabsTrigger>
+            <TabsTrigger value="general" className="font-ppsupply">General</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="providers" className="mt-4 h-full overflow-y-auto">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-ppneue mb-2">LLM Provider Configuration</h3>
+                <p className="text-sm text-muted-foreground font-ppsupply">
+                  Configure your API keys and settings for different LLM providers.
+                </p>
               </div>
 
-              {/* Content */}
-              <div className="flex-1 p-6 overflow-y-auto">
-                {activeTab === 'providers' && (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-ppneue text-gray-100 mb-4">LLM Provider Configuration</h3>
-                      <p className="text-sm text-gray-400 mb-6 font-ppsupply">
-                        Configure your API keys and settings for different LLM providers.
-                      </p>
-                    </div>
-
-                    {LLM_PROVIDERS.map((provider) => (
-                      <div key={provider.id} className="border border-gray-700 rounded-lg p-4 bg-gray-750">
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-ppneue text-gray-100">{provider.name}</h4>
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={settings.providers[provider.id]?.enabled || false}
-                              onChange={(e) =>
-                                updateProviderSetting(provider.id, 'enabled', e.target.checked)
-                              }
-                              className="mr-2 bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm font-ppsupply text-gray-300">Enabled</span>
-                          </label>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1 font-ppsupply">
-                              {provider.apiKeyLabel}
-                            </label>
-                            <input
-                              type="password"
-                              value={settings.providers[provider.id]?.apiKey || ''}
-                              onChange={(e) =>
-                                updateProviderSetting(provider.id, 'apiKey', e.target.value)
-                              }
-                              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100 placeholder-gray-400"
-                              placeholder="Enter your API key"
-                            />
-                          </div>
-
-                          {provider.baseUrl && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-300 mb-1 font-ppsupply">
-                                Base URL (Optional)
-                              </label>
-                              <input
-                                type="url"
-                                value={settings.providers[provider.id]?.baseUrl || ''}
-                                onChange={(e) =>
-                                  updateProviderSetting(provider.id, 'baseUrl', e.target.value)
-                                }
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100 placeholder-gray-400"
-                                placeholder="https://api.example.com"
-                              />
-                            </div>
-                          )}
-
-                          <div className="text-xs text-gray-500 font-ppsupply">
-                            Available models: {provider.models.map(m => m.name).join(', ')}
-                          </div>
-                        </div>
+              {LLM_PROVIDERS.map((provider) => (
+                <Card key={provider.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="font-ppneue">{provider.name}</CardTitle>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={settings.providers[provider.id]?.enabled || false}
+                          onCheckedChange={(checked) =>
+                            updateProviderSetting(provider.id, 'enabled', checked)
+                          }
+                        />
+                        <Label className="font-ppsupply">Enabled</Label>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'general' && (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-ppneue text-gray-100 mb-4">General Settings</h3>
                     </div>
-
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2 font-ppsupply">
-                        Default Model
-                      </label>
-                      <select
-                        value={settings.defaultModel}
-                        onChange={(e) => onUpdateSettings({ defaultModel: e.target.value })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100"
-                      >
-                        {LLM_PROVIDERS.flatMap(provider =>
-                          provider.models.map(model => (
-                            <option key={model.id} value={model.id}>
-                              {provider.name} - {model.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2 font-ppsupply">
-                        Theme
-                      </label>
-                      <select
-                        value={settings.theme}
-                        onChange={(e) => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' | 'system' })}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100"
-                      >
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id="autoSave"
-                        checked={settings.autoSave}
-                        onChange={(e) => onUpdateSettings({ autoSave: e.target.checked })}
-                        className="mr-2 bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
+                      <Label className="font-ppsupply">{provider.apiKeyLabel}</Label>
+                      <Input
+                        type="password"
+                        value={settings.providers[provider.id]?.apiKey || ''}
+                        onChange={(e) =>
+                          updateProviderSetting(provider.id, 'apiKey', e.target.value)
+                        }
+                        placeholder="Enter your API key"
+                        className="font-ppsupply"
                       />
-                      <label htmlFor="autoSave" className="text-sm font-ppsupply text-gray-300">
-                        Auto-save chat sessions
-                      </label>
                     </div>
 
-                    <div className="border-t border-gray-700 pt-6">
-                      <h4 className="font-ppneue text-gray-100 mb-4">Import/Export Settings</h4>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={onExportSettings}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-ppsupply"
-                        >
-                          Export Settings
-                        </button>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-gray-700 transition-colors font-ppsupply"
-                        >
-                          Import Settings
-                        </button>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".json"
-                          onChange={handleImport}
-                          className="hidden"
+                    {provider.baseUrl && (
+                      <div>
+                        <Label className="font-ppsupply">Base URL (Optional)</Label>
+                        <Input
+                          type="url"
+                          value={settings.providers[provider.id]?.baseUrl || ''}
+                          onChange={(e) =>
+                            updateProviderSetting(provider.id, 'baseUrl', e.target.value)
+                          }
+                          placeholder="https://api.example.com"
+                          className="font-ppsupply"
                         />
                       </div>
-                      {importError && (
-                        <p className="text-red-400 text-sm mt-2 font-ppsupply">{importError}</p>
-                      )}
+                    )}
+
+                    <div className="text-xs text-muted-foreground font-ppsupply">
+                      Available models: {provider.models.map(m => m.name).join(', ')}
                     </div>
-                  </div>
-                )}
-              </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="general" className="mt-4 h-full overflow-y-auto">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-ppneue mb-2">General Settings</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="font-ppsupply">Default Model</Label>
+                  <Select
+                    value={settings.defaultModel}
+                    onValueChange={(value) => onUpdateSettings({ defaultModel: value })}
+                  >
+                    <SelectTrigger className="font-ppsupply">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LLM_PROVIDERS.flatMap(provider =>
+                        provider.models.map(model => (
+                          <SelectItem key={model.id} value={model.id} className="font-ppsupply">
+                            {provider.name} - {model.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="font-ppsupply">Theme</Label>
+                  <Select
+                    value={settings.theme}
+                    onValueChange={(value: 'light' | 'dark' | 'system') => 
+                      onUpdateSettings({ theme: value })
+                    }
+                  >
+                    <SelectTrigger className="font-ppsupply">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="system" className="font-ppsupply">System</SelectItem>
+                      <SelectItem value="light" className="font-ppsupply">Light</SelectItem>
+                      <SelectItem value="dark" className="font-ppsupply">Dark</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="autoSave"
+                    checked={settings.autoSave}
+                    onCheckedChange={(checked) => onUpdateSettings({ autoSave: checked })}
+                  />
+                  <Label htmlFor="autoSave" className="font-ppsupply">
+                    Auto-save chat sessions
+                  </Label>
+                </div>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-ppneue">Import/Export Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-3">
+                    <Button onClick={onExportSettings} className="font-ppsupply">
+                      Export Settings
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="font-ppsupply"
+                    >
+                      Import Settings
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json"
+                      onChange={handleImport}
+                      className="hidden"
+                    />
+                  </div>
+                  {importError && (
+                    <p className="text-destructive text-sm font-ppsupply">{importError}</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }
