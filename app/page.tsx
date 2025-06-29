@@ -77,14 +77,14 @@ export default function Home() {
 
   if (sessionsLoading || settingsLoading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="h-screen flex items-center justify-center bg-gray-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-screen flex bg-gray-900">
       {/* Sidebar */}
       <ChatSidebar
         sessions={sessions}

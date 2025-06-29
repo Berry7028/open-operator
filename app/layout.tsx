@@ -43,14 +43,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        {/* Fallback for browsers that don't support SVG favicons */}
         <link rel="alternate icon" href="/favicon.ico" />
       </head>
       <body
-        className={`${inter.variable} ${ppNeue.variable} ${ppSupply.variable} font-sans antialiased bg-white text-gray-900`}
+        className={`${inter.variable} ${ppNeue.variable} ${ppSupply.variable} font-sans antialiased bg-gray-900 text-gray-100`}
       >
         <PostHogProvider>{children}</PostHogProvider>
         <Analytics />

@@ -213,7 +213,7 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="flex-1 flex">
+    <div className="flex-1 flex bg-gray-900">
       {/* Chat Messages */}
       <div className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto p-6" ref={chatContainerRef}>
@@ -229,7 +229,7 @@ export default function ChatInterface({
                   className={`max-w-[80%] p-4 rounded-lg font-ppsupply ${
                     message.role === 'user'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-gray-200 text-gray-900'
+                      : 'bg-gray-800 border border-gray-700 text-gray-100'
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -247,22 +247,22 @@ export default function ChatInterface({
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                className="bg-gray-800 border border-gray-700 rounded-lg p-4"
               >
-                <h4 className="font-ppneue text-gray-900 mb-4">Agent Execution Steps</h4>
+                <h4 className="font-ppneue text-gray-100 mb-4">Agent Execution Steps</h4>
                 <div className="space-y-3">
                   {agentState.steps.map((step, index) => (
-                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-3">
+                    <div key={index} className="bg-gray-750 border border-gray-700 rounded-lg p-3">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-500 font-ppsupply">
+                        <span className="text-sm text-gray-400 font-ppsupply">
                           Step {step.stepNumber}
                         </span>
-                        <span className="px-2 py-1 bg-gray-100 rounded text-xs font-ppsupply">
+                        <span className="px-2 py-1 bg-gray-700 rounded text-xs font-ppsupply text-gray-300">
                           {step.tool}
                         </span>
                       </div>
-                      <p className="font-medium font-ppsupply">{step.text}</p>
-                      <p className="text-sm text-gray-600 font-ppsupply">
+                      <p className="font-medium font-ppsupply text-gray-100">{step.text}</p>
+                      <p className="text-sm text-gray-400 font-ppsupply">
                         <span className="font-semibold">Reasoning: </span>
                         {step.reasoning}
                       </p>
@@ -278,10 +278,10 @@ export default function ChatInterface({
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start"
               >
-                <div className="bg-white border border-gray-200 rounded-lg p-4 font-ppsupply">
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 font-ppsupply">
                   <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span>Processing your request...</span>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    <span className="text-gray-100">Processing your request...</span>
                   </div>
                 </div>
               </motion.div>
@@ -292,20 +292,20 @@ export default function ChatInterface({
 
       {/* Browser View */}
       {agentState.sessionUrl && (
-        <div className="w-1/2 border-l border-gray-200 bg-white">
+        <div className="w-1/2 border-l border-gray-700 bg-gray-800">
           <div className="h-full flex flex-col">
             {/* Browser Chrome */}
-            <div className="bg-gray-100 border-b border-gray-200 p-2">
+            <div className="bg-gray-800 border-b border-gray-700 p-2">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-1 text-gray-500 hover:text-gray-700">←</button>
-                <button className="p-1 text-gray-500 hover:text-gray-700">→</button>
-                <button className="p-1 text-gray-500 hover:text-gray-700">↻</button>
-                <div className="flex-1 px-3 py-1 bg-white border border-gray-300 rounded text-sm text-gray-600">
+                <button className="p-1 text-gray-400 hover:text-gray-200">←</button>
+                <button className="p-1 text-gray-400 hover:text-gray-200">→</button>
+                <button className="p-1 text-gray-400 hover:text-gray-200">↻</button>
+                <div className="flex-1 px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-gray-300">
                   Browser Session
                 </div>
               </div>
@@ -314,14 +314,14 @@ export default function ChatInterface({
             {/* Browser Content */}
             <div className="flex-1">
               {isAgentFinished ? (
-                <div className="h-full flex items-center justify-center bg-gray-50">
+                <div className="h-full flex items-center justify-center bg-gray-800">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-16 h-16 bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <p className="text-gray-600 font-ppsupply">Task completed successfully!</p>
+                    <p className="text-gray-300 font-ppsupply">Task completed successfully!</p>
                   </div>
                 </div>
               ) : (

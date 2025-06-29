@@ -53,25 +53,25 @@ export default function SettingsModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
           <motion.div
-            className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
+            className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-gray-700"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-ppneue text-gray-900">Settings</h2>
+            <div className="flex items-center justify-between p-6 border-b border-gray-700">
+              <h2 className="text-xl font-ppneue text-gray-100">Settings</h2>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-400 hover:text-gray-200"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -81,14 +81,14 @@ export default function SettingsModal({
 
             <div className="flex h-[600px]">
               {/* Sidebar */}
-              <div className="w-64 bg-gray-50 border-r border-gray-200 p-4">
+              <div className="w-64 bg-gray-750 border-r border-gray-700 p-4">
                 <nav className="space-y-2">
                   <button
                     onClick={() => setActiveTab('providers')}
                     className={`w-full text-left px-3 py-2 rounded-lg font-ppsupply transition-colors ${
                       activeTab === 'providers'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'hover:bg-gray-100 text-gray-700'
+                        ? 'bg-blue-900/50 text-blue-300'
+                        : 'hover:bg-gray-700 text-gray-300'
                     }`}
                   >
                     LLM Providers
@@ -97,8 +97,8 @@ export default function SettingsModal({
                     onClick={() => setActiveTab('general')}
                     className={`w-full text-left px-3 py-2 rounded-lg font-ppsupply transition-colors ${
                       activeTab === 'general'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'hover:bg-gray-100 text-gray-700'
+                        ? 'bg-blue-900/50 text-blue-300'
+                        : 'hover:bg-gray-700 text-gray-300'
                     }`}
                   >
                     General
@@ -111,16 +111,16 @@ export default function SettingsModal({
                 {activeTab === 'providers' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-ppneue text-gray-900 mb-4">LLM Provider Configuration</h3>
-                      <p className="text-sm text-gray-600 mb-6 font-ppsupply">
+                      <h3 className="text-lg font-ppneue text-gray-100 mb-4">LLM Provider Configuration</h3>
+                      <p className="text-sm text-gray-400 mb-6 font-ppsupply">
                         Configure your API keys and settings for different LLM providers.
                       </p>
                     </div>
 
                     {LLM_PROVIDERS.map((provider) => (
-                      <div key={provider.id} className="border border-gray-200 rounded-lg p-4">
+                      <div key={provider.id} className="border border-gray-700 rounded-lg p-4 bg-gray-750">
                         <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-ppneue text-gray-900">{provider.name}</h4>
+                          <h4 className="font-ppneue text-gray-100">{provider.name}</h4>
                           <label className="flex items-center">
                             <input
                               type="checkbox"
@@ -128,15 +128,15 @@ export default function SettingsModal({
                               onChange={(e) =>
                                 updateProviderSetting(provider.id, 'enabled', e.target.checked)
                               }
-                              className="mr-2"
+                              className="mr-2 bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
                             />
-                            <span className="text-sm font-ppsupply text-gray-600">Enabled</span>
+                            <span className="text-sm font-ppsupply text-gray-300">Enabled</span>
                           </label>
                         </div>
 
                         <div className="space-y-3">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 font-ppsupply">
+                            <label className="block text-sm font-medium text-gray-300 mb-1 font-ppsupply">
                               {provider.apiKeyLabel}
                             </label>
                             <input
@@ -145,14 +145,14 @@ export default function SettingsModal({
                               onChange={(e) =>
                                 updateProviderSetting(provider.id, 'apiKey', e.target.value)
                               }
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply"
+                              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100 placeholder-gray-400"
                               placeholder="Enter your API key"
                             />
                           </div>
 
                           {provider.baseUrl && (
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1 font-ppsupply">
+                              <label className="block text-sm font-medium text-gray-300 mb-1 font-ppsupply">
                                 Base URL (Optional)
                               </label>
                               <input
@@ -161,7 +161,7 @@ export default function SettingsModal({
                                 onChange={(e) =>
                                   updateProviderSetting(provider.id, 'baseUrl', e.target.value)
                                 }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply"
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100 placeholder-gray-400"
                                 placeholder="https://api.example.com"
                               />
                             </div>
@@ -179,17 +179,17 @@ export default function SettingsModal({
                 {activeTab === 'general' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-ppneue text-gray-900 mb-4">General Settings</h3>
+                      <h3 className="text-lg font-ppneue text-gray-100 mb-4">General Settings</h3>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-ppsupply">
+                      <label className="block text-sm font-medium text-gray-300 mb-2 font-ppsupply">
                         Default Model
                       </label>
                       <select
                         value={settings.defaultModel}
                         onChange={(e) => onUpdateSettings({ defaultModel: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply"
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100"
                       >
                         {LLM_PROVIDERS.flatMap(provider =>
                           provider.models.map(model => (
@@ -202,13 +202,13 @@ export default function SettingsModal({
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 font-ppsupply">
+                      <label className="block text-sm font-medium text-gray-300 mb-2 font-ppsupply">
                         Theme
                       </label>
                       <select
                         value={settings.theme}
                         onChange={(e) => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' | 'system' })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply"
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-ppsupply text-gray-100"
                       >
                         <option value="system">System</option>
                         <option value="light">Light</option>
@@ -222,15 +222,15 @@ export default function SettingsModal({
                         id="autoSave"
                         checked={settings.autoSave}
                         onChange={(e) => onUpdateSettings({ autoSave: e.target.checked })}
-                        className="mr-2"
+                        className="mr-2 bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
                       />
-                      <label htmlFor="autoSave" className="text-sm font-ppsupply text-gray-700">
+                      <label htmlFor="autoSave" className="text-sm font-ppsupply text-gray-300">
                         Auto-save chat sessions
                       </label>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="font-ppneue text-gray-900 mb-4">Import/Export Settings</h4>
+                    <div className="border-t border-gray-700 pt-6">
+                      <h4 className="font-ppneue text-gray-100 mb-4">Import/Export Settings</h4>
                       <div className="flex gap-3">
                         <button
                           onClick={onExportSettings}
@@ -240,7 +240,7 @@ export default function SettingsModal({
                         </button>
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-ppsupply"
+                          className="px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-gray-700 transition-colors font-ppsupply"
                         >
                           Import Settings
                         </button>
@@ -253,7 +253,7 @@ export default function SettingsModal({
                         />
                       </div>
                       {importError && (
-                        <p className="text-red-600 text-sm mt-2 font-ppsupply">{importError}</p>
+                        <p className="text-red-400 text-sm mt-2 font-ppsupply">{importError}</p>
                       )}
                     </div>
                   </div>
