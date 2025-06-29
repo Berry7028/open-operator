@@ -6,27 +6,35 @@ import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
 import { availableTools, executeAgentTool } from "../../lib/agent-tools";
+import { getSessionApiKey } from "../settings/route";
 
 // Initialize LLM clients based on available API keys
 const getModelClient = (modelId: string): LanguageModelV1 => {
   if (modelId.startsWith('gpt-') || modelId.startsWith('o1-')) {
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = getSessionApiKey('OPENAI_API_KEY');
+    if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
-    return openai(modelId);
+    return openai(modelId, { apiKey });
   } else if (modelId.startsWith('claude-')) {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
+    if (!apiKey) {
       throw new Error('Anthropic API key not configured');
     }
-    return anthropic(modelId);
+    return anthropic(modelId, { apiKey });
   } else if (modelId.startsWith('gemini-')) {
-    if (!process.env.GOOGLE_AI_API_KEY) {
+    const apiKey = getSessionApiKey('GOOGLE_AI_API_KEY');
+    if (!apiKey) {
       throw new Error('Google AI API key not configured');
     }
-    return google(modelId);
+    return google(modelId, { apiKey });
   } else {
     // Default fallback
-    return anthropic("claude-3-5-sonnet-20241022");
+    const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
+    if (!apiKey) {
+      throw new Error('No API keys configured');
+    }
+    return anthropic("claude-3-5-sonnet-20241022", { apiKey });
   }
 };
 

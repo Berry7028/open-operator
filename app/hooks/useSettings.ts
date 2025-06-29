@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: DEFAULT_MODEL,
   theme: 'system',
   autoSave: true,
+  defaultTools: [],
 };
 
 export function useSettings() {
@@ -34,8 +35,28 @@ export function useSettings() {
     
     try {
       localStorage.setItem('app-settings', JSON.stringify(updated));
+      
+      // Also update environment variables for the session
+      if (newSettings.providers) {
+        updateSessionEnvironment(updated.providers);
+      }
     } catch (error) {
       console.error('Failed to save settings:', error);
+    }
+  };
+
+  const updateSessionEnvironment = async (providers: AppSettings['providers']) => {
+    try {
+      // Send API keys to backend for session use
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ providers }),
+      });
+    } catch (error) {
+      console.error('Failed to update session environment:', error);
     }
   };
 
@@ -67,11 +88,18 @@ export function useSettings() {
     });
   };
 
+  const getEnabledProviders = () => {
+    return Object.keys(settings.providers).filter(
+      providerId => settings.providers[providerId]?.enabled && settings.providers[providerId]?.apiKey
+    );
+  };
+
   return {
     settings,
     updateSettings,
     exportSettings,
     importSettings,
+    getEnabledProviders,
     isLoading,
   };
 }

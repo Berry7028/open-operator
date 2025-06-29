@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
-import { google } from "@ai-sdk/google";
+import { getSessionApiKey } from "../settings/route";
 
 export async function GET() {
   try {
     const models = [];
 
     // OpenAI models
-    if (process.env.OPENAI_API_KEY) {
+    const openaiKey = getSessionApiKey('OPENAI_API_KEY');
+    if (openaiKey) {
       try {
         const openaiModels = [
           { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', maxTokens: 128000, supportsVision: true },
@@ -25,7 +24,8 @@ export async function GET() {
     }
 
     // Anthropic models
-    if (process.env.ANTHROPIC_API_KEY) {
+    const anthropicKey = getSessionApiKey('ANTHROPIC_API_KEY');
+    if (anthropicKey) {
       try {
         const anthropicModels = [
           { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'anthropic', maxTokens: 200000, supportsVision: true },
@@ -39,7 +39,8 @@ export async function GET() {
     }
 
     // Google models
-    if (process.env.GOOGLE_AI_API_KEY) {
+    const googleKey = getSessionApiKey('GOOGLE_AI_API_KEY');
+    if (googleKey) {
       try {
         const googleModels = [
           { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash', provider: 'google', maxTokens: 1000000, supportsVision: true },
@@ -56,9 +57,9 @@ export async function GET() {
       success: true,
       models,
       providers: {
-        openai: { enabled: !!process.env.OPENAI_API_KEY, name: 'OpenAI' },
-        anthropic: { enabled: !!process.env.ANTHROPIC_API_KEY, name: 'Anthropic' },
-        google: { enabled: !!process.env.GOOGLE_AI_API_KEY, name: 'Google' },
+        openai: { enabled: !!openaiKey, name: 'OpenAI' },
+        anthropic: { enabled: !!anthropicKey, name: 'Anthropic' },
+        google: { enabled: !!googleKey, name: 'Google' },
       }
     });
   } catch (error) {

@@ -32,10 +32,11 @@ export default function ClientApp() {
     updateSettings,
     exportSettings,
     importSettings,
+    getEnabledProviders,
     isLoading: settingsLoading,
   } = useSettings();
 
-  const { models, isLoading: modelsLoading } = useModels();
+  const { models, isLoading: modelsLoading, error: modelsError } = useModels();
 
   const [selectedModel, setSelectedModel] = useState(settings.defaultModel);
 
@@ -46,6 +47,14 @@ export default function ClientApp() {
       setSelectedModel(defaultModel.id);
     }
   }, [models, selectedModel, settings.defaultModel]);
+
+  // Update models when settings change
+  useEffect(() => {
+    if (getEnabledProviders().length > 0) {
+      // Trigger models refresh when providers are configured
+      window.location.reload();
+    }
+  }, [settings.providers]);
 
   const handleNewChat = () => {
     setCurrentSessionId(null);
@@ -78,13 +87,17 @@ export default function ClientApp() {
 
   const currentSession = getCurrentSession();
 
-  if (sessionsLoading || settingsLoading || modelsLoading) {
+  if (sessionsLoading || settingsLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
       </div>
     );
   }
+
+  // Show settings modal if no providers are configured
+  const enabledProviders = getEnabledProviders();
+  const shouldShowSettings = enabledProviders.length === 0 && !isSettingsOpen;
 
   return (
     <div className="h-screen flex bg-background">
@@ -119,7 +132,7 @@ export default function ClientApp() {
 
       {/* Settings Modal */}
       <SettingsModal
-        isOpen={isSettingsOpen}
+        isOpen={isSettingsOpen || shouldShowSettings}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onUpdateSettings={updateSettings}
