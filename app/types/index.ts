@@ -20,6 +20,7 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   model: string;
+  selectedTools: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,12 +46,22 @@ export interface AppSettings {
   defaultModel: string;
   theme: 'light' | 'dark' | 'system';
   autoSave: boolean;
+  defaultTools: string[];
 }
 
 export interface BrowserStep {
   text: string;
   reasoning: string;
-  tool: "GOTO" | "ACT" | "EXTRACT" | "OBSERVE" | "CLOSE" | "WAIT" | "NAVBACK";
+  tool: "GOTO" | "ACT" | "EXTRACT" | "OBSERVE" | "CLOSE" | "WAIT" | "NAVBACK" | "CALL_TOOL";
   instruction: string;
   stepNumber?: number;
+  toolResult?: any;
+}
+
+export interface ToolSelection {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  enabled: boolean;
 }

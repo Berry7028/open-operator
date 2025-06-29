@@ -51,10 +51,11 @@ export default function ClientApp() {
     setCurrentSessionId(null);
   };
 
-  const handleStartChat = (message: string, model: string) => {
+  const handleStartChat = (message: string, model: string, selectedTools: string[] = []) => {
     const session = createSession(
       message.length > 50 ? message.substring(0, 50) + "..." : message,
-      model
+      model,
+      selectedTools
     );
 
     const userMessage: Message = {

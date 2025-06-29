@@ -5,10 +5,11 @@ import { google } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
+import { availableTools, executeAgentTool } from "../../lib/agent-tools";
 
 // Initialize LLM clients based on available API keys
 const getModelClient = (modelId: string): LanguageModelV1 => {
-  if (modelId.startsWith('gpt-')) {
+  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-')) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
@@ -32,7 +33,7 @@ const getModelClient = (modelId: string): LanguageModelV1 => {
 type Step = {
   text: string;
   reasoning: string;
-  tool: "GOTO" | "ACT" | "EXTRACT" | "OBSERVE" | "CLOSE" | "WAIT" | "NAVBACK";
+  tool: "GOTO" | "ACT" | "EXTRACT" | "OBSERVE" | "CLOSE" | "WAIT" | "NAVBACK" | "CALL_TOOL";
   instruction: string;
 };
 
@@ -116,12 +117,14 @@ async function sendPrompt({
   previousSteps = [],
   previousExtraction,
   modelId = "claude-3-5-sonnet-20241022",
+  selectedTools = [],
 }: {
   goal: string;
   sessionID: string;
   previousSteps?: Step[];
   previousExtraction?: string | ObserveResult[];
   modelId?: string;
+  selectedTools?: string[];
 }) {
   let currentUrl = "";
 
@@ -138,6 +141,26 @@ async function sendPrompt({
   } catch (error) {
     console.error("Error getting page info:", error);
   }
+
+  // Filter available tools based on selection
+  const enabledTools = selectedTools.length > 0 
+    ? availableTools.filter(tool => selectedTools.includes(tool.name))
+    : availableTools;
+
+  const toolsDescription = enabledTools.length > 0 
+    ? `\n\nAvailable Tools:
+You can use the following tools by setting tool to "CALL_TOOL" and providing the tool name and parameters in the instruction field as JSON:
+
+${enabledTools.map(tool => 
+  `- ${tool.name}: ${tool.description} (Category: ${tool.category})`
+).join('\n')}
+
+To use a tool, set:
+- tool: "CALL_TOOL"
+- instruction: JSON string with format: {"toolName": "tool_name", "params": {...}}
+
+Example: {"toolName": "create_todo", "params": {"title": "Complete project", "priority": "high"}}`
+    : '';
 
   const content: UserContent = [
     {
@@ -171,8 +194,10 @@ Important guidelines:
    - Select a single option
 3. Avoid combining multiple actions in one instruction
 4. If multiple actions are needed, they should be separate steps
+5. You can use external tools when appropriate for the task
+6. Consider using tools for file operations, programming tasks, calculations, etc.
 
-If the goal has been achieved, return "close".`,
+If the goal has been achieved, return "close".${toolsDescription}`,
     },
   ];
 
@@ -195,7 +220,7 @@ If the goal has been achieved, return "close".`,
       type: "text",
       text: `The result of the previous ${
         Array.isArray(previousExtraction) ? "observation" : "extraction"
-      } is: ${previousExtraction}.`,
+      } is: ${JSON.stringify(previousExtraction)}.`,
     });
   }
 
@@ -217,6 +242,7 @@ If the goal has been achieved, return "close".`,
         "CLOSE",
         "WAIT",
         "NAVBACK",
+        "CALL_TOOL",
       ]),
       instruction: z.string(),
     }),
@@ -259,13 +285,20 @@ Return a URL that would be most effective for achieving this goal.`,
 }
 
 export async function GET() {
-  return NextResponse.json({ message: "Agent API endpoint ready" });
+  return NextResponse.json({ 
+    message: "Agent API endpoint ready",
+    availableTools: availableTools.map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      category: tool.category,
+    }))
+  });
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { goal, sessionId, previousSteps = [], action, modelId } = body;
+    const { goal, sessionId, previousSteps = [], action, modelId, selectedTools = [] } = body;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -321,6 +354,7 @@ export async function POST(request: Request) {
           sessionID: sessionId,
           previousSteps,
           modelId,
+          selectedTools,
         });
 
         return NextResponse.json({
@@ -340,12 +374,31 @@ export async function POST(request: Request) {
           );
         }
 
-        // Execute the step using Stagehand
-        const extraction = await runStagehand({
-          sessionID: sessionId,
-          method: step.tool,
-          instruction: step.instruction,
-        });
+        let extraction = null;
+
+        // Handle tool execution
+        if (step.tool === "CALL_TOOL") {
+          try {
+            const toolInstruction = JSON.parse(step.instruction);
+            const { toolName, params } = toolInstruction;
+            
+            const toolResult = await executeAgentTool(toolName, params);
+            extraction = toolResult;
+          } catch (error) {
+            console.error("Tool execution error:", error);
+            extraction = {
+              success: false,
+              error: `Failed to execute tool: ${error}`,
+            };
+          }
+        } else {
+          // Execute browser step using Stagehand
+          extraction = await runStagehand({
+            sessionID: sessionId,
+            method: step.tool,
+            instruction: step.instruction,
+          });
+        }
 
         return NextResponse.json({
           success: true,

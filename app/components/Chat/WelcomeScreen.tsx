@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { ModelSelector } from "@/components/chat/model-selector";
+import { ToolSelector } from "@/components/chat/tool-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,18 +12,18 @@ import { useModels } from "@/app/hooks/useModels";
 import Image from "next/image";
 
 interface WelcomeScreenProps {
-  onStartChat: (message: string, model: string) => void;
+  onStartChat: (message: string, model: string, selectedTools: string[]) => void;
   selectedModel: string;
   onModelChange: (modelId: string) => void;
 }
 
 const EXAMPLE_PROMPTS = [
-  "What's the current price of NVIDIA stock?",
-  "Who is the top GitHub contributor to Stagehand by Browserbase?",
-  "How many wins do the 49ers have this season?",
-  "What is Stephen Curry's points per game average?",
-  "Find the latest news about AI developments",
-  "Search for the best restaurants in San Francisco",
+  "Create a todo list for my project tasks",
+  "Generate a Python script to analyze data",
+  "What's the current time in Tokyo?",
+  "Calculate the compound interest for $1000 at 5% for 10 years",
+  "Search for the latest AI developments",
+  "Create a folder structure for a new web project",
 ];
 
 export default function WelcomeScreen({
@@ -31,20 +32,21 @@ export default function WelcomeScreen({
   onModelChange,
 }: WelcomeScreenProps) {
   const [input, setInput] = useState("");
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const { models } = useModels();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const message = input.trim();
     if (message && selectedModel) {
-      onStartChat(message, selectedModel);
+      onStartChat(message, selectedModel, selectedTools);
       setInput("");
     }
   };
 
   const handleExampleClick = (prompt: string) => {
     if (selectedModel) {
-      onStartChat(prompt, selectedModel);
+      onStartChat(prompt, selectedModel, selectedTools);
     }
   };
 
@@ -74,7 +76,7 @@ export default function WelcomeScreen({
             <h1 className="text-3xl font-ppneue text-foreground">Open Operator</h1>
           </div>
           <p className="text-lg text-muted-foreground font-ppsupply">
-            Watch AI browse the web and complete tasks for you
+            AI Agent with powerful tools for web browsing, programming, and productivity
           </p>
         </div>
 
@@ -87,6 +89,20 @@ export default function WelcomeScreen({
               onModelChange={onModelChange}
             />
           </div>
+        </div>
+
+        {/* Tool Selection */}
+        <div className="mb-6">
+          <Label className="font-ppsupply text-foreground">Select Tools</Label>
+          <div className="mt-2">
+            <ToolSelector
+              selectedTools={selectedTools}
+              onToolsChange={setSelectedTools}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 font-ppsupply">
+            Choose which tools the agent can use. Leave empty to allow all tools.
+          </p>
         </div>
 
         {/* Input Form */}

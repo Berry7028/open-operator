@@ -15,6 +15,7 @@ export function useChatSessions() {
           ...session,
           createdAt: new Date(session.createdAt),
           updatedAt: new Date(session.updatedAt),
+          selectedTools: session.selectedTools || [],
           messages: session.messages.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp),
@@ -37,12 +38,13 @@ export function useChatSessions() {
     }
   };
 
-  const createSession = (title: string, model: string): ChatSession => {
+  const createSession = (title: string, model: string, selectedTools: string[] = []): ChatSession => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title,
       messages: [],
       model,
+      selectedTools,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

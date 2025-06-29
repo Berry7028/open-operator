@@ -107,6 +107,7 @@ export default function ChatInterface({
           goal: lastUserMessage.content,
           sessionId: sessionData.sessionId,
           modelId: session.model,
+          selectedTools: session.selectedTools || [],
           action: "START",
         }),
       });
@@ -159,6 +160,7 @@ export default function ChatInterface({
             sessionId,
             previousSteps: steps,
             modelId: session.model,
+            selectedTools: session.selectedTools || [],
             action: "GET_NEXT_STEP",
           }),
         });
@@ -208,6 +210,22 @@ export default function ChatInterface({
         });
 
         const executeData = await executeResponse.json();
+        
+        // Handle tool results
+        if (nextStep.tool === "CALL_TOOL" && executeData.extraction) {
+          nextStep.toolResult = executeData.extraction;
+          
+          // Update the step with tool result
+          setAgentState(prev => ({
+            ...prev,
+            steps: prev.steps.map(step => 
+              step.stepNumber === nextStep.stepNumber 
+                ? { ...step, toolResult: executeData.extraction }
+                : step
+            ),
+          }));
+        }
+
         if (!executeData.success || executeData.done) break;
 
       } catch (error) {
@@ -231,7 +249,7 @@ export default function ChatInterface({
 
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-card border rounded-lg p-4 font-ppsupply">
+                <div className="bg-card border border-border rounded-lg p-4 font-ppsupply">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Processing your request...</span>
