@@ -11,10 +11,10 @@ export function BrowserView({ sessionUrl, isFinished }: BrowserViewProps) {
   if (!sessionUrl) return null;
 
   return (
-    <div className="w-1/2 border-l bg-card">
+    <div className="w-1/2 border-l border-border bg-card">
       <div className="h-full flex flex-col">
         {/* Browser Chrome */}
-        <div className="bg-muted border-b p-2">
+        <div className="bg-muted border-b border-border p-2">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-3 h-3 rounded-full bg-red-500"></div>
             <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
@@ -24,7 +24,7 @@ export function BrowserView({ sessionUrl, isFinished }: BrowserViewProps) {
             <button className="p-1 text-muted-foreground hover:text-foreground">←</button>
             <button className="p-1 text-muted-foreground hover:text-foreground">→</button>
             <button className="p-1 text-muted-foreground hover:text-foreground">↻</button>
-            <div className="flex-1 px-3 py-1 bg-background border rounded text-sm text-muted-foreground">
+            <div className="flex-1 px-3 py-1 bg-background border border-border rounded text-sm text-muted-foreground">
               Browser Session
             </div>
           </div>

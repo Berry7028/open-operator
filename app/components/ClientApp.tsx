@@ -8,8 +8,8 @@ import ChatInterface from "./Chat/ChatInterface";
 import SettingsModal from "./Settings/SettingsModal";
 import { useChatSessions } from "../hooks/useChatSessions";
 import { useSettings } from "../hooks/useSettings";
+import { useModels } from "../hooks/useModels";
 import { Message } from "../types";
-import { LLM_PROVIDERS } from "../constants/llm-providers";
 
 export default function ClientApp() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -35,15 +35,17 @@ export default function ClientApp() {
     isLoading: settingsLoading,
   } = useSettings();
 
+  const { models, isLoading: modelsLoading } = useModels();
+
   const [selectedModel, setSelectedModel] = useState(settings.defaultModel);
 
   useEffect(() => {
-    setSelectedModel(settings.defaultModel);
-  }, [settings.defaultModel]);
-
-  const enabledProviders = Object.keys(settings.providers).filter(
-    providerId => settings.providers[providerId]?.enabled && settings.providers[providerId]?.apiKey
-  );
+    // Set default model when models are loaded
+    if (models.length > 0 && !selectedModel) {
+      const defaultModel = models.find(m => m.id === settings.defaultModel) || models[0];
+      setSelectedModel(defaultModel.id);
+    }
+  }, [models, selectedModel, settings.defaultModel]);
 
   const handleNewChat = () => {
     setCurrentSessionId(null);
@@ -75,16 +77,16 @@ export default function ClientApp() {
 
   const currentSession = getCurrentSession();
 
-  if (sessionsLoading || settingsLoading) {
+  if (sessionsLoading || settingsLoading || modelsLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-900">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex bg-gray-900">
+    <div className="h-screen flex bg-background">
       {/* Sidebar */}
       <ChatSidebar
         sessions={sessions}
@@ -110,7 +112,6 @@ export default function ClientApp() {
             onStartChat={handleStartChat}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-            enabledProviders={enabledProviders}
           />
         )}
       </div>

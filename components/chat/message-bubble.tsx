@@ -25,7 +25,7 @@ export function MessageBubble({ message, className }: MessageBubbleProps) {
           "max-w-[80%] p-4 rounded-lg font-ppsupply",
           message.role === 'user'
             ? 'bg-primary text-primary-foreground'
-            : 'bg-card border text-card-foreground'
+            : 'bg-card border border-border text-card-foreground'
         )}
       >
         <p className="whitespace-pre-wrap">{message.content}</p>
