@@ -116,6 +116,12 @@ const closeBrowserSessionSchema = z.object({
   sessionId: z.string().describe("Session ID to close"),
 });
 
+// Always-on utility: format the final answer in a unified style
+const formatFinalAnswerSchema = z.object({
+  answer: z.string().describe("Final answer content to format for the user"),
+  title: z.string().optional().describe("Optional short title for the answer"),
+});
+
 // Helper functions
 function sanitizePath(inputPath: string): string {
   // Remove any path traversal attempts
@@ -973,6 +979,24 @@ print(f"Type: {type(result).__name__}")
           error: `Failed to search web: ${error}`,
         };
       }
+    },
+  },
+  // Always-on utility: format the final answer in a unified style
+  {
+    name: "format_final_answer",
+    description: "Format the final answer in a consistent layout to be shown to the user. Always enabled.",
+    category: "utility",
+    parameters: formatFinalAnswerSchema,
+    execute: async (params) => {
+      const { answer, title } = params as { answer: string; title?: string };
+      const formatted = title
+        ? `## ${title}\n\n${answer}`
+        : answer;
+      return {
+        success: true,
+        formattedAnswer: formatted,
+        aiResponse: formatted,
+      };
     },
   },
 ];

@@ -32,6 +32,9 @@ export const languages = {
     taskCompletedDesc: '以下の目標を達成するために、{steps}ステップを正常に実行しました: "{goal}"',
     demoModeWarning: '⚠️ デモモードで実行中です。フルブラウザ自動化機能を使用するには、設定でBrowserbase APIキーを設定してください。',
     errorOccurred: '申し訳ございませんが、サポート中にエラーが発生しました。再度お試しください。',
+    loopLimitWarning: 'ステップ数が上限に達したため、処理を停止しました。',
+    loopSameToolWarning: '同じツールが繰り返し呼び出されたため、処理を停止しました。',
+    loopDetected: '同じツールが繰り返し使用されています。AIが自動的に調整します...',
     
     // Welcome Screen
     welcomeTitle: 'Open Operator',
@@ -96,6 +99,9 @@ export const languages = {
     taskCompletedDesc: 'I\'ve successfully executed {steps} steps to help you with: "{goal}"',
     demoModeWarning: '⚠️ Running in demo mode. To use full browser automation features, please configure Browserbase API keys in settings.',
     errorOccurred: 'Sorry, I encountered an error while trying to help you. Please try again.',
+    loopLimitWarning: 'Loop limit reached. Stopping execution.',
+    loopSameToolWarning: 'Same tool called repeatedly. Stopping execution.',
+    loopDetected: 'Loop detected. AI is automatically adjusting approach...',
     
     // Welcome Screen
     welcomeTitle: 'Open Operator',

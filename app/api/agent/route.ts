@@ -213,7 +213,7 @@ async function sendPrompt({
   }
 
   // Build a full tool availability list for the LLM
-  const toolsStatusList = availableTools.map(tool => `- ${tool.name}: ${selectedTools.includes(tool.name) ? 'enabled: true' : 'enabled: false'}`);
+  const toolsStatusList = availableTools.map(tool => `- ${tool.name}: ${tool.name === 'format_final_answer' || selectedTools.includes(tool.name) ? 'enabled: true' : 'enabled: false'}`);
 
   const toolsDescription = `\n\nTOOL AVAILABILITY LIST (enabled = can use):\n${toolsStatusList.join('\n')}
 
@@ -223,10 +223,35 @@ RULES FOR USING TOOLS:
 
   const shouldUseBrowser = previousSteps.some(step => step.tool === "GOTO") || currentUrl;
   
+  // ツール使用履歴を分析して改善指示を生成
+  const toolUsageHistory = previousSteps.map(step => ({ tool: step.tool, instruction: step.instruction }));
+  const recentTools = toolUsageHistory.slice(-5).map(h => h.tool);
+  const lastTool = recentTools[recentTools.length - 1];
+  const sameToolCount = recentTools.reverse().findIndex(tool => tool !== lastTool);
+  const actualSameCount = sameToolCount === -1 ? recentTools.length : sameToolCount;
+
+  let loopPreventionGuidance = '';
+  if (actualSameCount >= 2) {
+    loopPreventionGuidance = `
+
+⚠️ IMPORTANT LOOP PREVENTION NOTICE:
+You have used the "${lastTool}" tool ${actualSameCount} times in a row. This suggests you may be stuck in a loop.
+
+REQUIRED ACTIONS:
+1. CAREFULLY REVIEW the results from your previous ${actualSameCount} attempts
+2. If the previous results were successful, do NOT repeat the same tool - move to the next logical step
+3. If the previous results failed, try a DIFFERENT approach or tool
+4. If you have sufficient information to answer the user's question, use "format_final_answer" tool immediately
+5. Only repeat the same tool if you have a SPECIFIC reason and different parameters
+
+Previous tool usage: ${recentTools.reverse().join(' → ')}
+${previousExtraction ? `Latest result: ${JSON.stringify(previousExtraction, null, 2)}` : ''}`;
+  }
+
   const content: UserContent = [
     {
       type: "text",
-      text: `Goal: "${goal}"
+      text: `Goal: "${goal}"${loopPreventionGuidance}
 
 ${shouldUseBrowser ? `Current web page context (URL: ${currentUrl || 'unknown'})` : 'Working with local tools and files'}
 
@@ -263,7 +288,9 @@ ${shouldUseBrowser ? 'If continuing with web interaction:' : 'Choose the most ap
 - Use local tools whenever possible
 - Only navigate to websites when absolutely necessary
 
-If the goal has been achieved, return "CLOSE".${toolsDescription}
+When you have reached the final answer for the user's goal, CALL the "format_final_answer" tool once, passing the complete answer text in the "answer" parameter so that it can be displayed to the user.
+
+If the goal has been achieved, after calling the tool you should return "CLOSE".${toolsDescription}
 
 IMPORTANT LANGUAGE INSTRUCTION:
 Please respond in ${language === 'ja' ? 'Japanese (日本語)' : 'English'}. All explanations, reasoning, and text should be in ${language === 'ja' ? 'Japanese' : 'English'}.`,
@@ -331,7 +358,7 @@ async function analyzeGoalForTools(goal: string, modelId: string, selectedTools:
   reasoning: string;
 }> {
   // Use only tools explicitly selected by the user.
-  const enabledTools = availableTools.filter(tool => selectedTools.includes(tool.name));
+  const enabledTools = availableTools.filter(tool => tool.name === 'format_final_answer' || selectedTools.includes(tool.name));
 
   const message: CoreMessage = {
     role: "user",
@@ -395,7 +422,7 @@ async function parseNaturalLanguageInstruction(
   selectedTools: string[] = []
 ): Promise<{ toolName: string; params: Record<string, unknown> }> {
   // Use only tools explicitly selected by the user.
-  const enabledTools = availableTools.filter(tool => selectedTools.includes(tool.name));
+  const enabledTools = availableTools.filter(tool => tool.name === 'format_final_answer' || selectedTools.includes(tool.name));
 
   const message: CoreMessage = {
     role: "user",
@@ -601,7 +628,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { goal, sessionId, previousSteps = [], action, modelId, selectedTools = [], language = 'ja' } = body;
+    const { goal, sessionId, previousSteps = [], previousExtraction = null, action, modelId, selectedTools = [], language = 'ja' } = body;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -675,6 +702,7 @@ export async function POST(request: Request) {
           goal,
           sessionID: sessionId,
           previousSteps,
+          previousExtraction,
           modelId,
           selectedTools,
           language,
@@ -738,7 +766,7 @@ export async function POST(request: Request) {
             }
             
             // Check if the requested tool is enabled in this session
-            if (!selectedTools.includes(toolName)) {
+            if (toolName !== 'format_final_answer' && !selectedTools.includes(toolName)) {
               const aiResponse = language === 'ja'
                 ? `申し訳ございませんが、ツール「${toolName}」はこのセッションでは利用できません。`
                 : `Sorry, I cannot use the "${toolName}" tool because it is not enabled in this session.`;

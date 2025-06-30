@@ -10,6 +10,8 @@ import { BrowserView } from "@/components/chat/browser-view";
 import { Loader2 } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 import { getLanguageText } from "../../constants/languages";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronRight } from "lucide-react";
 
 interface ChatInterfaceProps {
   session: ChatSession;
@@ -37,7 +39,7 @@ export default function ChatInterface({
   const initializationRef = useRef(false);
   const { settings } = useSettings();
   const currentLanguage = settings.language || 'ja';
-  const t = (key: any) => getLanguageText(currentLanguage, key);
+  const t = (key: string) => getLanguageText(currentLanguage, key);
 
   const [agentState, setAgentState] = useState<AgentState>({
     sessionId: null,
@@ -180,9 +182,29 @@ export default function ChatInterface({
   };
 
   const continueAgentExecution = async (sessionId: string, goal: string, currentSteps: BrowserStep[]) => {
+    // 直前ステップのツール実行結果 → 次の LLM プロンプトへ
     let steps = [...currentSteps];
+    let lastExtraction: Record<string, unknown> | null = null;
+
+    // ループ安全策
+    let lastToolName: string | null = null;
+    let sameToolCount = 0;
+    const MAX_SAME_TOOL_COUNT = 3;
+    const MAX_TOTAL_STEPS = 25;
 
     while (true) {
+      // 上限チェック
+      if (steps.length >= MAX_TOTAL_STEPS) {
+        const warnMsg: Message = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: t('loopLimitWarning') || 'Loop limit reached. Stopping execution.',
+          role: 'assistant',
+          timestamp: new Date(),
+        };
+        onAddMessage(session.id, warnMsg);
+        break;
+      }
+
       try {
         // Get next step from LLM
         const nextStepResponse = await fetch("/api/agent", {
@@ -194,6 +216,7 @@ export default function ChatInterface({
             goal,
             sessionId,
             previousSteps: steps,
+            previousExtraction: lastExtraction, // ★ 直前のツール実行結果を渡す
             modelId: session.model,
             selectedTools: session.selectedTools || [],
             action: "GET_NEXT_STEP",
@@ -208,6 +231,25 @@ export default function ChatInterface({
           ...nextStepData.result,
           stepNumber: steps.length + 1,
         };
+
+        // ループ検出: 警告を出すが処理は継続（AIプロンプト側で対処）
+        if (lastToolName === nextStep.tool) {
+          sameToolCount += 1;
+          
+          // 3回目で警告メッセージを表示（但し処理は継続）
+          if (sameToolCount === MAX_SAME_TOOL_COUNT) {
+            const warnMsg: Message = {
+              id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              content: t('loopDetected') || '同じツールが繰り返し使用されています。AIが自動的に調整します...',
+              role: 'assistant',
+              timestamp: new Date(),
+            };
+            onAddMessage(session.id, warnMsg);
+          }
+        } else {
+          sameToolCount = 1;
+          lastToolName = nextStep.tool;
+        }
 
         steps = [...steps, nextStep];
         setAgentState(prev => ({
@@ -250,10 +292,24 @@ export default function ChatInterface({
         const executeData = await executeResponse.json();
         
         // Handle tool results
-        if (nextStep.tool === "CALL_TOOL" && executeData.extraction) {
+        if (executeData.extraction) {
           nextStep.toolResult = executeData.extraction;
-          
-          // Update the step with tool result
+
+          // 次のループ用に結果を保存
+          lastExtraction = executeData.extraction;
+
+          // AI が生成した自然文があればチャットへ追加
+          if (executeData.extraction.aiResponse) {
+            const aiMessage: Message = {
+              id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              content: executeData.extraction.aiResponse,
+              role: "assistant",
+              timestamp: new Date(),
+            };
+            onAddMessage(session.id, aiMessage);
+          }
+
+          // Update the step in state with tool result
           setAgentState(prev => ({
             ...prev,
             steps: prev.steps.map(step => 
@@ -283,7 +339,16 @@ export default function ChatInterface({
               <MessageBubble key={message.id} message={message} />
             ))}
 
-            <AgentSteps steps={agentState.steps} />
+            {/* ステップ詳細はデフォルトでは非表示にし、ユーザーがクリックで展開 */}
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-sm cursor-pointer select-none">
+                <ChevronRight className="h-4 w-4" />
+                <span className="font-ppsupply">詳細ステップを表示</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <AgentSteps steps={agentState.steps} />
+              </CollapsibleContent>
+            </Collapsible>
 
             {isLoading && (
               <div className="flex justify-start">
