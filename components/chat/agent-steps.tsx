@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
 import { BrowserStep } from "@/app/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, Wrench, Globe, CheckCircle, XCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, Wrench, Globe, CheckCircle, XCircle, Expand, Minimize } from "lucide-react";
 import { useState } from "react";
 
 interface AgentStepsProps {
@@ -25,6 +26,15 @@ export function AgentSteps({ steps }: AgentStepsProps) {
       newExpanded.add(stepNumber);
     }
     setExpandedSteps(newExpanded);
+  };
+
+  const expandAll = () => {
+    const allSteps = new Set(steps.map((_, index) => steps[index].stepNumber || index));
+    setExpandedSteps(allSteps);
+  };
+
+  const collapseAll = () => {
+    setExpandedSteps(new Set());
   };
 
   const getStepIcon = (tool: string) => {
@@ -63,14 +73,40 @@ export function AgentSteps({ steps }: AgentStepsProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="font-ppneue text-card-foreground">Agent Execution Steps</CardTitle>
+      <Card className="bg-card border-border max-h-[60vh] flex flex-col">
+        <CardHeader className="flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-ppneue text-card-foreground">
+              Agent Execution Steps ({steps.length})
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={expandAll}
+                disabled={expandedSteps.size === steps.length}
+                className="h-8 px-2 text-xs"
+              >
+                <Expand className="h-3 w-3 mr-1" />
+                すべて展開
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={collapseAll}
+                disabled={expandedSteps.size === 0}
+                className="h-8 px-2 text-xs"
+              >
+                <Minimize className="h-3 w-3 mr-1" />
+                すべて折りたたみ
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 overflow-y-auto flex-1 min-h-0">
           {steps.map((step, index) => {
             const isExpanded = expandedSteps.has(step.stepNumber || index);
-            const hasToolResult = step.tool === "CALL_TOOL" && step.toolResult;
+            const hasToolResult = Boolean(step.tool === "CALL_TOOL" && step.toolResult);
             
             return (
               <Card key={index} className="bg-muted/50 border-border">
@@ -125,16 +161,39 @@ export function AgentSteps({ steps }: AgentStepsProps) {
                           </span>
                         </div>
 
-                        {hasToolResult && (
-                          <div>
-                            <span className="font-semibold text-muted-foreground">Tool Result: </span>
-                            <div className="mt-2 p-3 bg-background border border-border rounded-md">
-                              <pre className="text-xs font-mono text-foreground overflow-x-auto">
-                                {JSON.stringify(step.toolResult, null, 2)}
-                              </pre>
-                            </div>
+                        {hasToolResult ? (
+                          <div className="space-y-3">
+                            {/* AI回答を優先的に表示 */}
+                            {step.toolResult && 
+                             typeof step.toolResult === 'object' && 
+                             'aiResponse' in step.toolResult && 
+                             step.toolResult.aiResponse ? (
+                              <div>
+                                <span className="font-semibold text-muted-foreground">AI回答: </span>
+                                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                                  <p className="text-sm text-foreground font-ppsupply whitespace-pre-wrap">
+                                    {step.toolResult.aiResponse as string}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : null}
+                            
+                            {/* 詳細な技術的結果 */}
+                            <details className="group">
+                              <summary className="cursor-pointer">
+                                <span className="font-semibold text-muted-foreground">
+                                  詳細な実行結果 
+                                  <span className="ml-1 text-xs group-open:hidden">(クリックで展開)</span>
+                                </span>
+                              </summary>
+                              <div className="mt-2 p-3 bg-background border border-border rounded-md max-h-48 overflow-y-auto">
+                                <pre className="text-xs font-mono text-foreground overflow-x-auto">
+                                  {JSON.stringify(step.toolResult, null, 2)}
+                                </pre>
+                              </div>
+                            </details>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </CardContent>
                   </CollapsibleContent>

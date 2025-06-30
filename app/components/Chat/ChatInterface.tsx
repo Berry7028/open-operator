@@ -8,6 +8,8 @@ import { MessageBubble } from "@/components/chat/message-bubble";
 import { AgentSteps } from "@/components/chat/agent-steps";
 import { BrowserView } from "@/components/chat/browser-view";
 import { Loader2 } from "lucide-react";
+import { useSettings } from "../../hooks/useSettings";
+import { getLanguageText } from "../../constants/languages";
 
 interface ChatInterfaceProps {
   session: ChatSession;
@@ -33,6 +35,9 @@ export default function ChatInterface({
   const [contextId, setContextId] = useAtom(contextIdAtom);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const initializationRef = useRef(false);
+  const { settings } = useSettings();
+  const currentLanguage = settings.language || 'ja';
+  const t = (key: any) => getLanguageText(currentLanguage, key);
 
   const [agentState, setAgentState] = useState<AgentState>({
     sessionId: null,
@@ -105,7 +110,7 @@ export default function ChatInterface({
         console.warn("Running in mock mode - Browserbase not configured");
         const warningMessage: Message = {
           id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          content: "⚠️ Running in demo mode. To use full browser automation features, please configure Browserbase API keys in settings.",
+          content: t('demoModeWarning'),
           role: "assistant",
           timestamp: new Date(),
         };
@@ -138,6 +143,7 @@ export default function ChatInterface({
           modelId: session.model,
           selectedTools: session.selectedTools || [],
           action: "START",
+          language: settings.language || 'ja',
         }),
       });
 
@@ -163,7 +169,7 @@ export default function ChatInterface({
       console.error("Browser session error:", error);
       const errorMessage: Message = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        content: "Sorry, I encountered an error while trying to help you. Please try again.",
+        content: t('errorOccurred'),
         role: "assistant",
         timestamp: new Date(),
       };
@@ -191,6 +197,7 @@ export default function ChatInterface({
             modelId: session.model,
             selectedTools: session.selectedTools || [],
             action: "GET_NEXT_STEP",
+            language: settings.language || 'ja',
           }),
         });
 
@@ -214,7 +221,7 @@ export default function ChatInterface({
           // Add completion message
           const completionMessage: Message = {
             id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            content: `Task completed! I've successfully executed ${steps.length} steps to help you with: "${goal}"`,
+            content: `${t('taskCompleted')} ${t('taskCompletedDesc').replace('{steps}', steps.length.toString()).replace('{goal}', goal)}`,
             role: "assistant",
             timestamp: new Date(),
             metadata: {
@@ -235,6 +242,7 @@ export default function ChatInterface({
             sessionId,
             step: nextStepData.result,
             action: "EXECUTE_STEP",
+            language: settings.language || 'ja',
           }),
         });
 
@@ -281,7 +289,7 @@ export default function ChatInterface({
                 <div className="bg-card border border-border rounded-lg p-4 font-ppsupply">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Processing your request...</span>
+                    <span>{t('processingRequest')}</span>
                   </div>
                 </div>
               </div>

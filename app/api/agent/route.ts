@@ -6,7 +6,7 @@ import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
 import { availableTools, executeAgentTool, isSessionActive } from "../../lib/agent-tools";
-import { getSessionApiKey } from "../settings/route";
+import { getSessionApiKey } from "../../lib/session-utils";
 
 // Initialize LLM clients based on available API keys
 const getModelClient = (modelId: string): LanguageModelV1 => {
@@ -186,6 +186,7 @@ async function sendPrompt({
   previousExtraction,
   modelId = "claude-3-5-sonnet-20241022",
   selectedTools = [],
+  language = 'ja',
 }: {
   goal: string;
   sessionID: string;
@@ -193,6 +194,7 @@ async function sendPrompt({
   previousExtraction?: string | ObserveResult[];
   modelId?: string;
   selectedTools?: string[];
+  language?: 'ja' | 'en';
 }) {
   let currentUrl = "";
 
@@ -277,7 +279,10 @@ ${shouldUseBrowser ? 'If continuing with web interaction:' : 'Choose the most ap
 - Use local tools whenever possible
 - Only navigate to websites when absolutely necessary
 
-If the goal has been achieved, return "CLOSE".${toolsDescription}`,
+If the goal has been achieved, return "CLOSE".${toolsDescription}
+
+IMPORTANT LANGUAGE INSTRUCTION:
+Please respond in ${language === 'ja' ? 'Japanese (日本語)' : 'English'}. All explanations, reasoning, and text should be in ${language === 'ja' ? 'Japanese' : 'English'}.`,
     },
   ];
 
@@ -335,7 +340,7 @@ If the goal has been achieved, return "CLOSE".${toolsDescription}`,
   };
 }
 
-async function analyzeGoalForTools(goal: string, modelId: string, selectedTools: string[] = []): Promise<{
+async function analyzeGoalForTools(goal: string, modelId: string, selectedTools: string[] = [], language: 'ja' | 'en' = 'ja'): Promise<{
   useTools: boolean;
   toolName?: string;
   params?: Record<string, unknown>;
@@ -375,7 +380,9 @@ Examples of tasks that need web browsing:
 - Accessing web applications
 
 If this goal can be solved with tools, suggest the first tool to use and its parameters.
-If it requires web browsing, explain why.`,
+If it requires web browsing, explain why.
+
+Please respond in ${language === 'ja' ? 'Japanese (日本語)' : 'English'}.`,
       },
     ],
   };
@@ -394,6 +401,204 @@ If it requires web browsing, explain why.`,
   return result.object;
 }
 
+async function parseNaturalLanguageInstruction(
+  instruction: string, 
+  modelId: string, 
+  selectedTools: string[] = []
+): Promise<{ toolName: string; params: Record<string, unknown> }> {
+  const enabledTools = selectedTools.length > 0 
+    ? availableTools.filter(tool => selectedTools.includes(tool.name))
+    : availableTools;
+
+  const message: CoreMessage = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: `Parse this natural language instruction into a proper tool call:
+
+Instruction: "${instruction}"
+
+Available tools:
+${enabledTools.map(tool => 
+  `- ${tool.name}: ${tool.description}`
+).join('\n')}
+
+Based on the instruction, determine:
+1. Which tool should be called
+2. What parameters are needed
+
+Examples of common patterns:
+- "time", "current time", "Tokyo time" → get_current_time with timezone parameter
+- "calculate", "math", numbers/expressions → calculate tool
+- "create todo", "add task" → create_todo tool
+- "list files", "show files" → list_files tool
+- "write code", "generate code" → generate_code tool
+- "run python", "execute python" → execute_python tool
+
+Return the tool name and parameters in the following format.`,
+      },
+    ],
+  };
+
+  try {
+    const result = await generateObject({
+      model: getModelClient(modelId),
+      schema: z.object({
+        toolName: z.string(),
+        params: z.record(z.any()),
+      }),
+      messages: [message],
+    });
+
+    return result.object;
+  } catch (error) {
+    console.error("Failed to parse natural language instruction:", error);
+    // フォールバック: デフォルトの時刻取得ツールを返す
+    return {
+      toolName: "get_current_time",
+      params: { timezone: "UTC" }
+    };
+  }
+}
+
+async function generateResponseFromToolResult(
+  toolResult: Record<string, unknown>,
+  goal: string,
+  step: Step,
+  modelId: string,
+  language: 'ja' | 'en' = 'ja'
+): Promise<string> {
+  const message: CoreMessage = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+text: language === 'ja' 
+          ? `ユーザーの目標: "${goal}"
+
+実行されたアクション: ${step.text}
+使用されたツール: ${step.tool}
+ツールの指示: ${step.instruction}
+
+ツール実行結果:
+${JSON.stringify(toolResult, null, 2)}
+
+上記のツール実行結果を基に、ユーザーに対する自然で分かりやすい日本語の回答を作成してください。以下の点を考慮してください：
+
+1. 結果が成功した場合は、具体的な内容を含めて報告
+2. エラーが発生した場合は、問題点と可能な解決策を提案
+3. 技術的な詳細よりも、ユーザーにとって有用な情報を重視
+4. 必要に応じて次のステップや関連する提案を含める
+5. 親しみやすく、理解しやすい言葉で回答
+
+回答例:
+- ファイル作成: "ファイル'example.txt'を正常に作成しました。内容は..."
+- 計算結果: "計算結果は25です。計算式: 2+3*4 = 2+12 = 14..."
+- Todo作成: "新しいタスク'プロジェクト完了'を優先度'高'で作成しました..."
+- エラー時: "申し訳ございませんが、ファイルの作成中にエラーが発生しました。原因は...です。解決するには..."
+
+ユーザーに対する回答:`
+          : `User Goal: "${goal}"
+
+Executed Action: ${step.text}
+Tool Used: ${step.tool}
+Tool Instruction: ${step.instruction}
+
+Tool Execution Result:
+${JSON.stringify(toolResult, null, 2)}
+
+Based on the above tool execution result, please create a natural and easy-to-understand English response for the user. Please consider the following points:
+
+1. If the result is successful, report specific content
+2. If an error occurs, suggest the problem and possible solutions
+3. Focus on information useful to users rather than technical details
+4. Include next steps or related suggestions as needed
+5. Respond in friendly and understandable language
+
+Response examples:
+- File creation: "Successfully created file 'example.txt'. The content is..."
+- Calculation result: "The calculation result is 25. Formula: 2+3*4 = 2+12 = 14..."
+- Todo creation: "Created new task 'Complete project' with high priority..."
+- Error case: "Sorry, an error occurred while creating the file. The cause is... To resolve this..."
+
+Response to user:`,
+      },
+    ],
+  };
+
+  try {
+    const result = await generateObject({
+      model: getModelClient(modelId),
+      schema: z.object({
+        response: z.string().describe(
+          language === 'ja' 
+            ? "ユーザーに対する自然で分かりやすい日本語の回答"
+            : "Natural and easy-to-understand English response to the user"
+        ),
+      }),
+      messages: [message],
+    });
+
+    return result.object.response;
+  } catch (error) {
+    console.error("Failed to generate response from tool result:", error);
+    
+    // より詳細なフォールバック処理
+    const errorInfo = {
+      message: error instanceof Error ? error.message : 'Unknown error type',
+      name: error instanceof Error ? error.name : 'UnknownError',
+      stack: error instanceof Error ? error.stack : undefined,
+      toolResult: toolResult,
+      step: step.tool,
+      instruction: step.instruction
+    };
+    
+    console.error("Error generation details:", errorInfo);
+    
+    // 成功/失敗に関わらず、より詳細な情報を提供
+    if (toolResult.success === false) {
+      // エラー情報をより詳しく分析
+      const errorMessage = toolResult.error as string || 'エラーの詳細が不明です';
+      const toolName = step.tool;
+      
+      // 一般的なエラーパターンに基づいて適切な説明を生成
+      let userFriendlyMessage = '';
+      
+      if (errorMessage.includes('not found') || errorMessage.includes('not exist')) {
+        userFriendlyMessage = `申し訳ございませんが、指定されたリソースが見つかりませんでした。ファイルパスやツール名を確認してください。`;
+      } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+        userFriendlyMessage = `アクセス権限の問題が発生しました。ファイルやディレクトリの権限を確認してください。`;
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
+        userFriendlyMessage = `ネットワークの問題またはタイムアウトが発生しました。インターネット接続を確認して再度お試しください。`;
+      } else if (errorMessage.includes('syntax') || errorMessage.includes('invalid')) {
+        userFriendlyMessage = `入力内容にエラーがあります。指示の形式や内容を確認してください。`;
+      } else if (errorMessage.includes('API') || errorMessage.includes('key')) {
+        userFriendlyMessage = `API接続の問題が発生しました。設定やAPIキーを確認してください。`;
+      } else {
+        userFriendlyMessage = `申し訳ございませんが、${toolName}の実行中に問題が発生しました。`;
+      }
+      
+      return `${userFriendlyMessage}\n\n**エラーの詳細**: ${errorMessage}\n\n**解決策**: \n- 入力内容を確認してください\n- 必要なファイルや設定が存在することを確認してください\n- 問題が続く場合は、別の方法でお試しください`;
+    } else if (toolResult.success === true) {
+      // 成功時でもAI生成に失敗した場合
+      const resultData = toolResult.result || toolResult.data || toolResult;
+      return `操作が正常に完了しました。\n\n**実行内容**: ${step.text}\n**結果**: ${typeof resultData === 'object' ? JSON.stringify(resultData, null, 2) : resultData}`;
+    } else {
+      // success フィールドがない場合
+      const hasData = Object.keys(toolResult).some(key => 
+        key !== 'toolName' && key !== 'params' && key !== 'executedAt'
+      );
+      
+      if (hasData) {
+        return `操作を実行しました。\n\n**実行内容**: ${step.text}\n**詳細**: 実行は完了しましたが、結果の詳細な説明の生成中に問題が発生しました。技術的な詳細は実行結果セクションでご確認ください。`;
+      } else {
+        return `申し訳ございませんが、操作の実行中に予期しない問題が発生しました。\n\n**実行しようとした内容**: ${step.text}\n**ツール**: ${step.tool}\n\n**対処法**: \n- 指示の内容を確認してください\n- 別の方法でお試しください\n- 問題が続く場合は管理者にお問い合わせください`;
+      }
+    }
+  }
+}
+
 
 export async function GET() {
   return NextResponse.json({ 
@@ -409,7 +614,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { goal, sessionId, previousSteps = [], action, modelId, selectedTools = [] } = body;
+    const { goal, sessionId, previousSteps = [], action, modelId, selectedTools = [], language = 'ja' } = body;
 
     if (!sessionId) {
       return NextResponse.json(
@@ -429,7 +634,7 @@ export async function POST(request: Request) {
         }
 
         // Analyze if this goal can be solved with tools instead of browser
-        const canUseTools = await analyzeGoalForTools(goal, modelId, selectedTools);
+        const canUseTools = await analyzeGoalForTools(goal, modelId, selectedTools, language);
         
         if (canUseTools.useTools) {
           // Start with tool-based approach
@@ -485,6 +690,7 @@ export async function POST(request: Request) {
           previousSteps,
           modelId,
           selectedTools,
+          language,
         });
 
         return NextResponse.json({
@@ -508,9 +714,9 @@ export async function POST(request: Request) {
 
         // Handle tool execution
         if (step.tool === "CALL_TOOL") {
+          let toolInstruction: { toolName: string; params: Record<string, unknown> } | null = null;
+          
           try {
-            let toolInstruction;
-            
             // 安全なJSONパース処理
             if (typeof step.instruction === 'string') {
               try {
@@ -518,21 +724,14 @@ export async function POST(request: Request) {
                 if (step.instruction.trim().startsWith('{') && step.instruction.trim().endsWith('}')) {
                   toolInstruction = JSON.parse(step.instruction);
                 } else {
-                  // JSONではない場合は、デフォルトの構造で包む
-                  throw new Error('Not a valid JSON format');
+                  // JSONではない場合は、フォールバック処理で適切なツール呼び出しを推測
+                  console.warn("Non-JSON instruction detected, attempting to parse:", step.instruction);
+                  toolInstruction = await parseNaturalLanguageInstruction(step.instruction, modelId, selectedTools);
                 }
               } catch {
                 // JSONパースに失敗した場合のフォールバック処理
                 console.warn("Failed to parse JSON instruction, attempting fallback:", step.instruction);
-                extraction = {
-                  success: false,
-                  error: `Invalid tool instruction format. Expected JSON but received: ${step.instruction.substring(0, 100)}...`,
-                };
-                return NextResponse.json({
-                  success: true,
-                  extraction,
-                  done: false,
-                });
+                toolInstruction = await parseNaturalLanguageInstruction(step.instruction, modelId, selectedTools);
               }
             } else if (typeof step.instruction === 'object') {
               // 既にオブジェクトの場合
@@ -541,6 +740,10 @@ export async function POST(request: Request) {
               throw new Error('Invalid instruction type');
             }
 
+            if (!toolInstruction) {
+              throw new Error('Failed to parse tool instruction');
+            }
+            
             const { toolName, params } = toolInstruction;
             
             if (!toolName) {
@@ -548,12 +751,83 @@ export async function POST(request: Request) {
             }
             
             const toolResult = await executeAgentTool(toolName, params || {});
-            extraction = toolResult;
+            
+            // ツール実行結果を基にAIが自然な回答を生成
+            const aiResponse = await generateResponseFromToolResult(
+              toolResult,
+              goal || '',
+              step,
+              modelId,
+              language
+            );
+            
+            extraction = {
+              ...toolResult,
+              aiResponse,
+            };
           } catch (error) {
             console.error("Tool execution error:", error);
+            
+            // より詳細なエラー情報を収集
+            const errorDetails = {
+              originalError: error,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+              stack: error instanceof Error ? error.stack : undefined,
+              toolName: toolInstruction?.toolName || 'unknown',
+              params: toolInstruction?.params || {},
+              instruction: step.instruction,
+              timestamp: new Date().toISOString()
+            };
+            
+            console.error("Detailed tool execution error:", errorDetails);
+            
+            // ユーザーフレンドリーなエラー説明を生成
+            let userErrorMessage = '';
+            const errorMsg = errorDetails.errorMessage.toLowerCase();
+            
+            if (errorMsg.includes('tool') && errorMsg.includes('not found')) {
+              userErrorMessage = language === 'ja' 
+                ? `指定されたツール「${errorDetails.toolName}」が見つかりません。利用可能なツール一覧を確認してください。`
+                : `The specified tool "${errorDetails.toolName}" was not found. Please check the available tool list.`;
+            } else if (errorMsg.includes('missing') || errorMsg.includes('required')) {
+              userErrorMessage = language === 'ja'
+                ? `必要なパラメータが不足しています。ツール「${errorDetails.toolName}」の実行に必要な情報を確認してください。`
+                : `Required parameters are missing. Please check the information needed to execute tool "${errorDetails.toolName}".`;
+            } else if (errorMsg.includes('invalid') || errorMsg.includes('validation')) {
+              userErrorMessage = language === 'ja'
+                ? `入力パラメータが正しくありません。ツール「${errorDetails.toolName}」の形式を確認してください。`
+                : `Input parameters are incorrect. Please check the format for tool "${errorDetails.toolName}".`;
+            } else if (errorMsg.includes('permission') || errorMsg.includes('access denied')) {
+              userErrorMessage = language === 'ja'
+                ? `アクセス権限の問題があります。ファイルやリソースへのアクセス権限を確認してください。`
+                : `Access permission issue occurred. Please check file or resource access permissions.`;
+            } else if (errorMsg.includes('network') || errorMsg.includes('timeout')) {
+              userErrorMessage = language === 'ja'
+                ? `ネットワークの問題が発生しました。インターネット接続を確認して再度お試しください。`
+                : `Network issue occurred. Please check your internet connection and try again.`;
+            } else if (errorMsg.includes('api') && errorMsg.includes('key')) {
+              userErrorMessage = language === 'ja'
+                ? `API設定の問題があります。APIキーが正しく設定されているか確認してください。`
+                : `API configuration issue occurred. Please check if the API key is correctly configured.`;
+            } else {
+              userErrorMessage = language === 'ja'
+                ? `ツール「${errorDetails.toolName}」の実行中に問題が発生しました。`
+                : `An issue occurred while executing tool "${errorDetails.toolName}".`;
+            }
+            
             extraction = {
               success: false,
-              error: `Failed to execute tool: ${error}`,
+              error: errorDetails.errorMessage,
+              userMessage: userErrorMessage,
+              toolName: errorDetails.toolName,
+              suggestion: language === 'ja' 
+                ? "パラメータや設定を確認してから再度お試しください。問題が続く場合は、別のアプローチを検討してください。"
+                : "Please check the parameters and settings, then try again. If the problem persists, consider a different approach.",
+              timestamp: errorDetails.timestamp,
+              aiResponse: language === 'ja'
+                ? `${userErrorMessage}\n\n**技術的な詳細**: ${errorDetails.errorMessage}\n\n**提案**: パラメータや設定を確認してから再度お試しください。問題が続く場合は、別のアプローチを検討してください。`
+                : `${userErrorMessage}\n\n**Technical Details**: ${errorDetails.errorMessage}\n\n**Suggestion**: Please check the parameters and settings, then try again. If the problem persists, consider a different approach.`
             };
           }
         } else {
@@ -567,19 +841,47 @@ export async function POST(request: Request) {
               };
             } else {
               // Execute browser step using Stagehand
-              extraction = await runStagehand({
+              const browserResult = await runStagehand({
                 sessionID: sessionId,
                 method: step.tool,
                 instruction: step.instruction,
               });
+              
+              // ブラウザ操作結果にもAI回答を生成
+              const aiResponse = await generateResponseFromToolResult(
+                browserResult as Record<string, unknown>,
+                goal || '',
+                step,
+                modelId,
+                language
+              );
+              
+              extraction = {
+                ...(browserResult as Record<string, unknown>),
+                aiResponse,
+              };
             }
           } else {
             // Execute other non-browser steps
-            extraction = await runStagehand({
+            const otherResult = await runStagehand({
               sessionID: sessionId,
               method: step.tool,
               instruction: step.instruction,
             });
+            
+                         // その他の操作結果にもAI回答を生成
+             const aiResponse = await generateResponseFromToolResult(
+               otherResult as Record<string, unknown>,
+               goal || '',
+               step,
+               modelId,
+               language
+             );
+             
+             extraction = {
+               ...(otherResult as Record<string, unknown>),
+               aiResponse,
+             };
           }
         }
 

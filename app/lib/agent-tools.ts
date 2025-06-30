@@ -981,7 +981,12 @@ export async function executeAgentTool(toolName: string, params: Record<string, 
   const tool = availableTools.find(t => t.name === toolName);
   
   if (!tool) {
-    throw new Error(`Tool "${toolName}" not found`);
+    return {
+      success: false,
+      error: `Tool "${toolName}" not found`,
+      availableTools: availableTools.map(t => t.name),
+      suggestion: `利用可能なツール: ${availableTools.map(t => t.name).join(', ')}`
+    };
   }
   
   try {
@@ -992,13 +997,46 @@ export async function executeAgentTool(toolName: string, params: Record<string, 
     const result = await tool.execute(validatedParams);
     
     return {
+      success: true,
       toolName,
       params: validatedParams,
       result,
       executedAt: new Date().toISOString(),
     };
   } catch (error) {
-    throw new Error(`Failed to execute tool "${toolName}": ${error}`);
+    console.error(`Error executing tool "${toolName}":`, error);
+    
+    // より詳細なエラー情報を生成
+    const errorInfo = {
+      toolName,
+      inputParams: params,
+      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+      timestamp: new Date().toISOString()
+    };
+    
+    // Zodパラメータ検証エラーの場合、より親切な説明を提供
+    if (error instanceof Error && error.message.includes('validation')) {
+      return {
+        success: false,
+        error: `パラメータの検証に失敗しました: ${error.message}`,
+        toolName,
+        inputParams: params,
+        suggestion: `ツール "${toolName}" の必要なパラメータを確認してください。`,
+        timestamp: errorInfo.timestamp
+      };
+    }
+    
+    // その他のエラーの場合
+    return {
+      success: false,
+      error: `ツール "${toolName}" の実行中にエラーが発生しました: ${errorInfo.error}`,
+      toolName,
+      inputParams: params,
+      errorType: errorInfo.errorType,
+      suggestion: "パラメータや実行環境を確認してから再度お試しください。",
+      timestamp: errorInfo.timestamp
+    };
   }
 }
 

@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   autoSave: true,
   defaultTools: [],
+  language: 'ja',
 };
 
 export function useSettings() {

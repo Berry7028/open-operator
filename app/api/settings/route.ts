@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-
-// Session storage for API keys (in production, use secure session storage)
-const sessionApiKeys: Record<string, string> = {};
+import { setSessionApiKey, getSessionKeys } from "../../lib/session-utils";
 
 export async function POST(request: Request) {
   try {
@@ -12,9 +10,9 @@ export async function POST(request: Request) {
     Object.keys(providers).forEach(providerId => {
       const provider = providers[providerId];
       if (provider?.enabled && provider?.apiKey) {
-        sessionApiKeys[`${providerId.toUpperCase()}_API_KEY`] = provider.apiKey;
+        setSessionApiKey(`${providerId.toUpperCase()}_API_KEY`, provider.apiKey);
         if (provider.baseUrl) {
-          sessionApiKeys[`${providerId.toUpperCase()}_BASE_URL`] = provider.baseUrl;
+          setSessionApiKey(`${providerId.toUpperCase()}_BASE_URL`, provider.baseUrl);
         }
       }
     });
@@ -32,11 +30,6 @@ export async function POST(request: Request) {
 export async function GET() {
   return NextResponse.json({
     success: true,
-    sessionKeys: Object.keys(sessionApiKeys),
+    sessionKeys: getSessionKeys(),
   });
-}
-
-// Helper function to get session API key
-export function getSessionApiKey(keyName: string): string | undefined {
-  return sessionApiKeys[keyName] || process.env[keyName];
 }

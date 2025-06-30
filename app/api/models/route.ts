@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionApiKey } from "../settings/route";
+import { getSessionApiKey } from "../../lib/session-utils";
 
 export async function GET() {
   try {

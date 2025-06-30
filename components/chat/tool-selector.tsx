@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTools } from "@/app/hooks/useTools";
 import {
   Dialog,
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Wrench, Loader2 } from "lucide-react";
+import { Settings, Wrench, Loader2, AlertCircle } from "lucide-react";
 
 interface ToolSelectorProps {
   selectedTools: string[];
@@ -33,23 +33,28 @@ export function ToolSelector({ selectedTools, onToolsChange }: ToolSelectorProps
     toggleTool,
     toggleCategory,
     toggleAll,
+    setExternalSelectedTools,
     getSelectedToolsCount,
     getTotalToolsCount,
     isAllSelected,
     isCategorySelected,
-  } = useTools();
+  } = useTools(selectedTools);
 
-  // Sync with parent component
+  // Sync external changes to internal state
+  useEffect(() => {
+    setExternalSelectedTools(selectedTools);
+  }, [selectedTools, setExternalSelectedTools]);
+
   const handleToggleTool = (toolName: string) => {
-    toggleTool(toolName);
     const newSelectedTools = selectedTools.includes(toolName)
       ? selectedTools.filter(name => name !== toolName)
       : [...selectedTools, toolName];
+    
+    toggleTool(toolName);
     onToolsChange(newSelectedTools);
   };
 
   const handleToggleCategory = (category: string, enabled: boolean) => {
-    toggleCategory(category, enabled);
     const categoryTools = toolsByCategory[category] || [];
     const categoryToolNames = categoryTools.map(tool => tool.name);
     
@@ -59,12 +64,15 @@ export function ToolSelector({ selectedTools, onToolsChange }: ToolSelectorProps
     } else {
       newSelectedTools = selectedTools.filter(name => !categoryToolNames.includes(name));
     }
+    
+    toggleCategory(category, enabled);
     onToolsChange(newSelectedTools);
   };
 
   const handleToggleAll = (enabled: boolean) => {
+    const newSelectedTools = enabled ? tools.map(tool => tool.name) : [];
     toggleAll(enabled);
-    onToolsChange(enabled ? tools.map(tool => tool.name) : []);
+    onToolsChange(newSelectedTools);
   };
 
   if (isLoading) {
@@ -80,7 +88,8 @@ export function ToolSelector({ selectedTools, onToolsChange }: ToolSelectorProps
 
   if (error) {
     return (
-      <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-md">
+      <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-md">
+        <AlertCircle className="h-4 w-4 text-destructive" />
         <p className="text-sm text-destructive font-ppsupply">{error}</p>
       </div>
     );
@@ -94,15 +103,16 @@ export function ToolSelector({ selectedTools, onToolsChange }: ToolSelectorProps
           Tools ({getSelectedToolsCount()}/{getTotalToolsCount()})
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-ppneue flex items-center gap-2">
             <Settings className="h-5 w-5" />
             Select Agent Tools
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto">
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
           {/* Master Toggle */}
           <Card>
             <CardHeader className="pb-3">
@@ -189,7 +199,8 @@ export function ToolSelector({ selectedTools, onToolsChange }: ToolSelectorProps
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
+        {/* Footer buttons */}
+        <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
           <Button variant="outline" onClick={() => setIsOpen(false)} className="font-ppsupply">
             Cancel
           </Button>

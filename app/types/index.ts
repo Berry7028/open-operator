@@ -47,6 +47,7 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   autoSave: boolean;
   defaultTools: string[];
+  language: 'ja' | 'en';
 }
 
 export interface BrowserStep {

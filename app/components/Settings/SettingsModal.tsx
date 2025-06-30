@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { AppSettings } from "../../types";
 import { LLM_PROVIDERS } from "../../constants/llm-providers";
+import { getLanguageText } from "../../constants/languages";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,8 @@ export default function SettingsModal({
   const [importError, setImportError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentLanguage = settings.language || 'ja';
+  const t = (key: any) => getLanguageText(currentLanguage, key);
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -105,21 +108,21 @@ export default function SettingsModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-ppneue text-card-foreground">Settings</DialogTitle>
+          <DialogTitle className="font-ppneue text-card-foreground">{t('settings')}</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="providers" className="h-[600px]">
           <TabsList className="grid w-full grid-cols-2 bg-muted">
-            <TabsTrigger value="providers" className="font-ppsupply">LLM Providers</TabsTrigger>
-            <TabsTrigger value="general" className="font-ppsupply">General</TabsTrigger>
+            <TabsTrigger value="providers" className="font-ppsupply">{t('llmProviders')}</TabsTrigger>
+            <TabsTrigger value="general" className="font-ppsupply">{t('general')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="providers" className="mt-4 h-full overflow-y-auto">
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-ppneue mb-2 text-card-foreground">LLM Provider Configuration</h3>
+                <h3 className="text-lg font-ppneue mb-2 text-card-foreground">{t('llmProviderConfiguration')}</h3>
                 <p className="text-sm text-muted-foreground font-ppsupply">
-                  Configure your API keys and settings for different LLM providers.
+                  {t('llmProviderConfigurationDesc')}
                 </p>
               </div>
 
@@ -132,12 +135,12 @@ export default function SettingsModal({
                         {isProviderConfigured(provider.id) ? (
                           <Badge variant="default" className="bg-green-500/20 text-green-400 border-green-500/30">
                             <CheckCircle className="w-3 h-3 mr-1" />
-                            Configured
+                            {t('configured')}
                           </Badge>
                         ) : (
                           <Badge variant="destructive" className="bg-red-500/20 text-red-400 border-red-500/30">
                             <AlertCircle className="w-3 h-3 mr-1" />
-                            Not Configured
+                            {t('notConfigured')}
                           </Badge>
                         )}
                       </div>
@@ -148,7 +151,7 @@ export default function SettingsModal({
                             updateProviderSetting(provider.id, 'enabled', checked)
                           }
                         />
-                        <Label className="font-ppsupply text-card-foreground">Enabled</Label>
+                        <Label className="font-ppsupply text-card-foreground">{t('enabled')}</Label>
                       </div>
                     </div>
                   </CardHeader>
@@ -171,7 +174,7 @@ export default function SettingsModal({
                           disabled={!settings.providers[provider.id]?.apiKey || testingConnection === provider.id}
                           className="font-ppsupply"
                         >
-                          {testingConnection === provider.id ? 'Testing...' : 'Test'}
+                          {testingConnection === provider.id ? t('testing') : t('test')}
                         </Button>
                       </div>
                     </div>
@@ -192,7 +195,7 @@ export default function SettingsModal({
                     )}
 
                     <div className="text-xs text-muted-foreground font-ppsupply">
-                      Available models: {provider.models.map(m => m.name).join(', ')}
+                      {t('availableModels')}: {provider.models.map(m => m.name).join(', ')}
                     </div>
                   </CardContent>
                 </Card>
@@ -210,7 +213,7 @@ export default function SettingsModal({
                         onClick={onClose}
                         className="font-ppsupply border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/20"
                       >
-                        Skip for now
+                        {t('skipForNow')}
                       </Button>
                     </div>
                   </CardContent>
@@ -222,12 +225,12 @@ export default function SettingsModal({
           <TabsContent value="general" className="mt-4 h-full overflow-y-auto">
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-ppneue mb-2 text-card-foreground">General Settings</h3>
+                <h3 className="text-lg font-ppneue mb-2 text-card-foreground">{t('general')} {t('settings')}</h3>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <Label className="font-ppsupply text-card-foreground">Default Model</Label>
+                  <Label className="font-ppsupply text-card-foreground">{t('defaultModel')}</Label>
                   <Select
                     value={settings.defaultModel}
                     onValueChange={(value) => onUpdateSettings({ defaultModel: value })}
@@ -248,7 +251,7 @@ export default function SettingsModal({
                 </div>
 
                 <div>
-                  <Label className="font-ppsupply text-card-foreground">Theme</Label>
+                  <Label className="font-ppsupply text-card-foreground">{t('theme')}</Label>
                   <Select
                     value={settings.theme}
                     onValueChange={(value: 'light' | 'dark' | 'system') => 
@@ -259,9 +262,27 @@ export default function SettingsModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border">
-                      <SelectItem value="system" className="font-ppsupply">System</SelectItem>
-                      <SelectItem value="light" className="font-ppsupply">Light</SelectItem>
-                      <SelectItem value="dark" className="font-ppsupply">Dark</SelectItem>
+                      <SelectItem value="system" className="font-ppsupply">{t('system')}</SelectItem>
+                      <SelectItem value="light" className="font-ppsupply">{t('light')}</SelectItem>
+                      <SelectItem value="dark" className="font-ppsupply">{t('dark')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="font-ppsupply text-card-foreground">{t('language')}</Label>
+                  <Select
+                    value={settings.language}
+                    onValueChange={(value: 'ja' | 'en') => 
+                      onUpdateSettings({ language: value })
+                    }
+                  >
+                    <SelectTrigger className="font-ppsupply bg-card border-border mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      <SelectItem value="ja" className="font-ppsupply">{t('japanese')}</SelectItem>
+                      <SelectItem value="en" className="font-ppsupply">{t('english')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -273,26 +294,26 @@ export default function SettingsModal({
                     onCheckedChange={(checked) => onUpdateSettings({ autoSave: checked })}
                   />
                   <Label htmlFor="autoSave" className="font-ppsupply text-card-foreground">
-                    Auto-save chat sessions
+                    {t('autoSave')}
                   </Label>
                 </div>
               </div>
 
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="font-ppneue text-card-foreground">Import/Export Settings</CardTitle>
+                  <CardTitle className="font-ppneue text-card-foreground">{t('importExportSettings')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-3">
                     <Button onClick={onExportSettings} className="font-ppsupply">
-                      Export Settings
+                      {t('exportSettings')}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
                       className="font-ppsupply"
                     >
-                      Import Settings
+                      {t('importSettings')}
                     </Button>
                     <input
                       ref={fileInputRef}
