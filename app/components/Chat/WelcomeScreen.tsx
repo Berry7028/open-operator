@@ -71,7 +71,7 @@ export default function WelcomeScreen({
   const { models } = useModels();
   const { settings } = useSettings();
   const currentLanguage = settings.language || 'ja';
-  const t = (key: any) => getLanguageText(currentLanguage, key);
+  const t = (key: string) => getLanguageText(currentLanguage, key);
   const examplePrompts = EXAMPLE_PROMPTS[currentLanguage];
 
   const handleSubmit = (e: React.FormEvent) => {

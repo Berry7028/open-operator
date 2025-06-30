@@ -54,7 +54,7 @@ export default function SettingsModal({
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentLanguage = settings.language || 'ja';
-  const t = (key: any) => getLanguageText(currentLanguage, key);
+  const t = (key: string) => getLanguageText(currentLanguage, key);
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
