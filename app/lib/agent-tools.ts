@@ -33,31 +33,52 @@ async function ensureDirectories() {
   }
 }
 
-// File System Tools
-const createFileSchema = z.object({
-  path: z.string().describe("File path to create (relative to workspace)"),
-  content: z.string().describe("File content"),
-});
+// --- Workspace scoping ---
+// Each chat session can have its own sub‐directory inside the global workspace.  
+// To support this we add an **optional** `sessionId` parameter to all filesystem related
+// schemas.  If provided, file operations will be scoped to `workspace/<sessionId>`.
 
-const createFolderSchema = z.object({
-  path: z.string().describe("Folder path to create (relative to workspace)"),
-});
+const withSessionId = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) =>
+  schema.extend({
+    sessionId: z.string().optional().describe(
+      "Chat session ID used to scope paths under workspace/<sessionId>. If omitted, the global workspace root is used."
+    ),
+  });
 
-const readFileSchema = z.object({
-  path: z.string().describe("File path to read (relative to workspace)"),
-});
+const createFileSchema = withSessionId(
+  z.object({
+    path: z.string().describe("File path to create (relative to the session workspace)"),
+    content: z.string().describe("File content"),
+  })
+);
 
-const listFilesSchema = z.object({
-  path: z.string().optional().describe("Directory path to list (relative to workspace, default: current directory)"),
-});
+const createFolderSchema = withSessionId(
+  z.object({
+    path: z.string().describe("Folder path to create (relative to the session workspace)"),
+  })
+);
+
+const readFileSchema = withSessionId(
+  z.object({
+    path: z.string().describe("File path to read (relative to the session workspace)"),
+  })
+);
+
+const listFilesSchema = withSessionId(
+  z.object({
+    path: z.string().optional().describe("Directory path to list (relative to the session workspace, default: '.')"),
+  })
+);
 
 // Programming Tools
-const generateCodeSchema = z.object({
-  language: z.string().describe("Programming language"),
-  description: z.string().describe("What the code should do"),
-  framework: z.string().optional().describe("Framework to use (if any)"),
-  filename: z.string().optional().describe("Filename to save the code"),
-});
+const generateCodeSchema = withSessionId(
+  z.object({
+    language: z.string().describe("Programming language"),
+    description: z.string().describe("What the code should do"),
+    framework: z.string().optional().describe("Framework to use (if any)"),
+    filename: z.string().optional().describe("Filename to save the code"),
+  })
+);
 
 const analyzeCodeSchema = z.object({
   code: z.string().describe("Code to analyze"),
@@ -359,9 +380,10 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path, content } = params as { path: string; content: string };
+        const { path, content, sessionId } = params as { path: string; content: string; sessionId?: string };
         const sanitizedPath = sanitizePath(path);
-        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        const baseDir = sessionId ? join(WORKSPACE_DIR, sanitizePath(sessionId)) : WORKSPACE_DIR;
+        const fullPath = join(baseDir, sanitizedPath);
         
         // Ensure parent directory exists
         const parentDir = join(fullPath, '..');
@@ -370,12 +392,14 @@ export const availableTools: AgentTool[] = [
         await fs.writeFile(fullPath, content, 'utf8');
         const stats = await fs.stat(fullPath);
         
+        // Return metadata along with the original content so the UI can instantly preview the file
         return {
           success: true,
-          message: `File created at workspace/${sanitizedPath}`,
-          path: sanitizedPath,
+          message: `File created at workspace/${sessionId ? `${sessionId}/` : ''}${sanitizedPath}`,
+          path: sessionId ? `${sessionId}/${sanitizedPath}` : sanitizedPath,
           size: stats.size,
           fullPath,
+          content, // include file content for preview purposes
         };
       } catch (error) {
         return {
@@ -393,16 +417,17 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path } = params as { path: string };
+        const { path, sessionId } = params as { path: string; sessionId?: string };
         const sanitizedPath = sanitizePath(path);
-        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        const baseDir = sessionId ? join(WORKSPACE_DIR, sanitizePath(sessionId)) : WORKSPACE_DIR;
+        const fullPath = join(baseDir, sanitizedPath);
         
         await fs.mkdir(fullPath, { recursive: true });
         
         return {
           success: true,
-          message: `Folder created at workspace/${sanitizedPath}`,
-          path: sanitizedPath,
+          message: `Folder created at workspace/${sessionId ? `${sessionId}/` : ''}${sanitizedPath}`,
+          path: sessionId ? `${sessionId}/${sanitizedPath}` : sanitizedPath,
           fullPath,
         };
       } catch (error) {
@@ -420,9 +445,10 @@ export const availableTools: AgentTool[] = [
     parameters: readFileSchema,
     execute: async (params) => {
       try {
-        const { path } = params as { path: string };
+        const { path, sessionId } = params as { path: string; sessionId?: string };
         const sanitizedPath = sanitizePath(path);
-        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        const baseDir = sessionId ? join(WORKSPACE_DIR, sanitizePath(sessionId)) : WORKSPACE_DIR;
+        const fullPath = join(baseDir, sanitizedPath);
         
         const content = await fs.readFile(fullPath, 'utf8');
         const stats = await fs.stat(fullPath);
@@ -430,7 +456,7 @@ export const availableTools: AgentTool[] = [
         return {
           success: true,
           content,
-          path: sanitizedPath,
+          path: sessionId ? `${sessionId}/${sanitizedPath}` : sanitizedPath,
           size: stats.size,
           lastModified: stats.mtime,
         };
@@ -450,10 +476,18 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path = "." } = params as { path?: string };
+        const { path = ".", sessionId } = params as { path?: string; sessionId?: string };
         const sanitizedPath = sanitizePath(path);
-        const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+        const baseDir = sessionId ? join(WORKSPACE_DIR, sanitizePath(sessionId)) : WORKSPACE_DIR;
+        const fullPath = join(baseDir, sanitizedPath);
         
+        // Ensure the base directory exists (especially for new sessions)
+        try {
+          await fs.access(baseDir);
+        } catch {
+          await fs.mkdir(baseDir, { recursive: true });
+        }
+
         const entries = await fs.readdir(fullPath, { withFileTypes: true });
         const files = await Promise.all(
           entries.map(async (entry) => {
@@ -472,7 +506,7 @@ export const availableTools: AgentTool[] = [
         return {
           success: true,
           files,
-          path: sanitizedPath,
+          path: sessionId ? `${sessionId}/${sanitizedPath}` : sanitizedPath,
           count: files.length,
         };
       } catch (error) {
@@ -492,11 +526,12 @@ export const availableTools: AgentTool[] = [
     parameters: generateCodeSchema,
     execute: async (params) => {
       try {
-        const { language, description, framework, filename } = params as {
+        const { language, description, framework, filename, sessionId } = params as {
           language: string;
           description: string;
           framework?: string;
           filename?: string;
+          sessionId?: string;
         };
         
         // Generate code based on language and description
@@ -540,11 +575,12 @@ export const availableTools: AgentTool[] = [
           await ensureDirectories();
           const fileName = filename.includes('.') ? filename : `${filename}${fileExtension}`;
           const sanitizedPath = sanitizePath(fileName);
-          const fullPath = join(WORKSPACE_DIR, sanitizedPath);
+          const baseDir = sessionId ? join(WORKSPACE_DIR, sanitizePath(sessionId)) : WORKSPACE_DIR;
+          const fullPath = join(baseDir, sanitizedPath);
           
           await fs.writeFile(fullPath, generatedCode, 'utf8');
-          result.savedAs = `workspace/${sanitizedPath}`;
-          result.message = `Code generated and saved to workspace/${sanitizedPath}`;
+          result.savedAs = `workspace/${sessionId ? `${sessionId}/` : ''}${sanitizedPath}`;
+          result.message = `Code generated and saved to workspace/${sessionId ? `${sessionId}/` : ''}${sanitizedPath}`;
         } else {
           result.message = "Code generated successfully";
         }

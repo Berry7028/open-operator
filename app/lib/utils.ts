@@ -3,6 +3,10 @@ export function generateId(prefix: string = 'id'): string {
 }
 
 export function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for older environments
   return generateId('session');
 }
 

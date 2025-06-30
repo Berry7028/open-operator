@@ -36,6 +36,12 @@ export const languages = {
     loopSameToolWarning: '同じツールが繰り返し呼び出されたため、処理を停止しました。',
     loopDetected: '同じツールが繰り返し使用されています。AIが自動的に調整します...',
     
+    // Side Panel
+    codePreview: 'コードプレビュー',
+    fileStructure: 'ファイル構成',
+    todoList: 'ToDoリスト',
+    noPreview: 'プレビューはありません',
+    
     // Welcome Screen
     welcomeTitle: 'Open Operator',
     welcomeSubtitle: 'ウェブブラウジング、プログラミング、生産性向上のための強力なツールを備えたAIエージェント',
@@ -102,6 +108,12 @@ export const languages = {
     loopLimitWarning: 'Loop limit reached. Stopping execution.',
     loopSameToolWarning: 'Same tool called repeatedly. Stopping execution.',
     loopDetected: 'Loop detected. AI is automatically adjusting approach...',
+    
+    // Side Panel
+    codePreview: 'Code Preview',
+    fileStructure: 'File Structure',
+    todoList: 'ToDo List',
+    noPreview: 'No preview available',
     
     // Welcome Screen
     welcomeTitle: 'Open Operator',

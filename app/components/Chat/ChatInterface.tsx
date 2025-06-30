@@ -6,7 +6,7 @@ import { useAtom } from "jotai/react";
 import { contextIdAtom } from "../../atoms";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { AgentSteps } from "@/components/chat/agent-steps";
-import { BrowserView } from "@/components/chat/browser-view";
+import { SidePanel } from "@/components/chat/side-panel";
 import { Loader2 } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 import { getLanguageText } from "../../constants/languages";
@@ -207,7 +207,8 @@ export default function ChatInterface({
 
       try {
         // Get next step from LLM
-        const nextStepResponse = await fetch("/api/agent", {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nextStepResponse: any = await fetch("/api/agent", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -224,7 +225,8 @@ export default function ChatInterface({
           }),
         });
 
-        const nextStepData = await nextStepResponse.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nextStepData: any = await nextStepResponse.json();
         if (!nextStepData.success) break;
 
         const nextStep = {
@@ -275,7 +277,8 @@ export default function ChatInterface({
         }
 
         // Execute the step
-        const executeResponse = await fetch("/api/agent", {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const executeResponse: any = await fetch("/api/agent", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -289,7 +292,8 @@ export default function ChatInterface({
           }),
         });
 
-        const executeData = await executeResponse.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const executeData: any = await executeResponse.json();
         
         // Handle tool results
         if (executeData.extraction) {
@@ -364,9 +368,10 @@ export default function ChatInterface({
         </div>
       </div>
 
-      <BrowserView 
-        sessionUrl={agentState.sessionUrl} 
-        isFinished={isAgentFinished} 
+      <SidePanel
+        sessionUrl={agentState.sessionUrl}
+        isFinished={isAgentFinished}
+        steps={agentState.steps}
       />
     </div>
   );
