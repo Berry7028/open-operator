@@ -24,6 +24,7 @@ interface AgentState {
 
 export default function ChatInterface({
   session,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onUpdateSession,
   onAddMessage,
 }: ChatInterfaceProps) {
@@ -70,6 +71,7 @@ export default function ChatInterface({
       initializationRef.current = true;
       startBrowserSession();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.messages, session.id]); // Add session.id as dependency
 
   const startBrowserSession = async () => {

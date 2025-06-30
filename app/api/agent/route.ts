@@ -5,7 +5,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
-import { availableTools, executeAgentTool } from "../../lib/agent-tools";
+import { availableTools, executeAgentTool, isSessionActive } from "../../lib/agent-tools";
 import { getSessionApiKey } from "../settings/route";
 
 // Initialize LLM clients based on available API keys
@@ -338,7 +338,7 @@ If the goal has been achieved, return "CLOSE".${toolsDescription}`,
 async function analyzeGoalForTools(goal: string, modelId: string, selectedTools: string[] = []): Promise<{
   useTools: boolean;
   toolName?: string;
-  params?: any;
+  params?: Record<string, unknown>;
   reasoning: string;
 }> {
   const enabledTools = selectedTools.length > 0 
@@ -394,34 +394,6 @@ If it requires web browsing, explain why.`,
   return result.object;
 }
 
-async function selectStartingUrl(goal: string, modelId: string = "claude-3-5-sonnet-20241022") {
-  const message: CoreMessage = {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: `Given the goal: "${goal}", determine the best URL to start from.
-Choose from:
-1. A relevant search engine (Google, Bing, etc.)
-2. A direct URL if you're confident about the target website
-3. Any other appropriate starting point
-
-Return a URL that would be most effective for achieving this goal.`,
-      },
-    ],
-  };
-
-  const result = await generateObject({
-    model: getModelClient(modelId),
-    schema: z.object({
-      url: z.string().url(),
-      reasoning: z.string(),
-    }),
-    messages: [message],
-  });
-
-  return result.object;
-}
 
 export async function GET() {
   return NextResponse.json({ 
@@ -478,20 +450,16 @@ export async function POST(request: Request) {
             done: false,
           });
         } else {
-          // Fallback to browser-based approach
-          const { url, reasoning } = await selectStartingUrl(goal, modelId);
+          // Browser-based approach requires manual session start
           const firstStep = {
-            text: `Navigating to ${url}`,
-            reasoning,
-            tool: "GOTO" as const,
-            instruction: url,
+            text: "To accomplish this goal, you need to start a browser session first. Please use the 'start_browser_session' tool.",
+            reasoning: "Browser operations require an active session. Use start_browser_session tool to begin.",
+            tool: "CALL_TOOL" as const,
+            instruction: JSON.stringify({
+              toolName: "start_browser_session",
+              params: { sessionId: sessionId }
+            }),
           };
-
-          await runStagehand({
-            sessionID: sessionId,
-            method: "GOTO",
-            instruction: url,
-          });
 
           return NextResponse.json({
             success: true,
@@ -541,10 +509,45 @@ export async function POST(request: Request) {
         // Handle tool execution
         if (step.tool === "CALL_TOOL") {
           try {
-            const toolInstruction = JSON.parse(step.instruction);
+            let toolInstruction;
+            
+            // 安全なJSONパース処理
+            if (typeof step.instruction === 'string') {
+              try {
+                // JSON文字列かどうかをチェック
+                if (step.instruction.trim().startsWith('{') && step.instruction.trim().endsWith('}')) {
+                  toolInstruction = JSON.parse(step.instruction);
+                } else {
+                  // JSONではない場合は、デフォルトの構造で包む
+                  throw new Error('Not a valid JSON format');
+                }
+              } catch {
+                // JSONパースに失敗した場合のフォールバック処理
+                console.warn("Failed to parse JSON instruction, attempting fallback:", step.instruction);
+                extraction = {
+                  success: false,
+                  error: `Invalid tool instruction format. Expected JSON but received: ${step.instruction.substring(0, 100)}...`,
+                };
+                return NextResponse.json({
+                  success: true,
+                  extraction,
+                  done: false,
+                });
+              }
+            } else if (typeof step.instruction === 'object') {
+              // 既にオブジェクトの場合
+              toolInstruction = step.instruction;
+            } else {
+              throw new Error('Invalid instruction type');
+            }
+
             const { toolName, params } = toolInstruction;
             
-            const toolResult = await executeAgentTool(toolName, params);
+            if (!toolName) {
+              throw new Error('Missing toolName in instruction');
+            }
+            
+            const toolResult = await executeAgentTool(toolName, params || {});
             extraction = toolResult;
           } catch (error) {
             console.error("Tool execution error:", error);
@@ -554,12 +557,30 @@ export async function POST(request: Request) {
             };
           }
         } else {
-          // Execute browser step using Stagehand
-          extraction = await runStagehand({
-            sessionID: sessionId,
-            method: step.tool,
-            instruction: step.instruction,
-          });
+          // Check if session is active for browser operations
+          const browserTools = ["GOTO", "ACT", "EXTRACT", "OBSERVE", "WAIT", "NAVBACK", "CLOSE"];
+          if (browserTools.includes(step.tool)) {
+            if (!isSessionActive(sessionId)) {
+              extraction = {
+                success: false,
+                error: `Browser session ${sessionId} is not active. Please start a browser session first using the 'start_browser_session' tool.`,
+              };
+            } else {
+              // Execute browser step using Stagehand
+              extraction = await runStagehand({
+                sessionID: sessionId,
+                method: step.tool,
+                instruction: step.instruction,
+              });
+            }
+          } else {
+            // Execute other non-browser steps
+            extraction = await runStagehand({
+              sessionID: sessionId,
+              method: step.tool,
+              instruction: step.instruction,
+            });
+          }
         }
 
         return NextResponse.json({

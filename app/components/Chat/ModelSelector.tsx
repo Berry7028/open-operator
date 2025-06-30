@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { LLM_PROVIDERS } from "../../constants/llm-providers";
-import { LLMModel } from "../../types";
 
 interface ModelSelectorProps {
   selectedModel: string;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
 import ChatSidebar from "./Sidebar/ChatSidebar";
 import WelcomeScreen from "./Chat/WelcomeScreen";
 import ChatInterface from "./Chat/ChatInterface";
@@ -46,7 +45,7 @@ export default function ClientApp() {
     isLoading: settingsLoading,
   } = useSettings();
 
-  const { models, isLoading: modelsLoading, error: modelsError, refetchModels } = useModels();
+  const { models, isLoading: modelsLoading, refetchModels } = useModels();
 
   const [selectedModel, setSelectedModel] = useState(settings.defaultModel);
 
@@ -64,7 +63,7 @@ export default function ClientApp() {
     if (enabledProviders.length > 0 && models.length === 0 && !modelsLoading) {
       refetchModels();
     }
-  }, [getEnabledProviders().length, models.length, modelsLoading, refetchModels]);
+  }, [getEnabledProviders, models.length, modelsLoading, refetchModels]);
 
   // Reset skip state when providers are configured
   useEffect(() => {
@@ -73,7 +72,7 @@ export default function ClientApp() {
       setHasSkippedInitialSettings(false);
       localStorage.removeItem('hasSkippedInitialSettings');
     }
-  }, [getEnabledProviders().length, hasSkippedInitialSettings]);
+  }, [getEnabledProviders, hasSkippedInitialSettings]);
 
   const handleNewChat = () => {
     setCurrentSessionId(null);

@@ -60,12 +60,13 @@ export default function SettingsModal({
     try {
       await onImportSettings(file);
       setImportError(null);
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       setImportError('Failed to import settings. Please check the file format.');
     }
   };
 
-  const updateProviderSetting = (providerId: string, key: string, value: any) => {
+  const updateProviderSetting = (providerId: string, key: string, value: string | boolean) => {
     const newProviders = {
       ...settings.providers,
       [providerId]: {

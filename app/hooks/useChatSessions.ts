@@ -12,14 +12,14 @@ export function useChatSessions() {
     try {
       const saved = localStorage.getItem('chat-sessions');
       if (saved) {
-        const parsedSessions = JSON.parse(saved).map((session: any) => ({
+        const parsedSessions = JSON.parse(saved).map((session: Record<string, unknown>) => ({
           ...session,
-          createdAt: new Date(session.createdAt),
-          updatedAt: new Date(session.updatedAt),
-          selectedTools: session.selectedTools || [],
-          messages: session.messages.map((msg: any) => ({
+          createdAt: new Date(session.createdAt as string),
+          updatedAt: new Date(session.updatedAt as string),
+          selectedTools: (session.selectedTools as string[]) || [],
+          messages: (session.messages as Record<string, unknown>[]).map((msg: Record<string, unknown>) => ({
             ...msg,
-            timestamp: new Date(msg.timestamp),
+            timestamp: new Date(msg.timestamp as string),
           })),
         }));
         setSessions(parsedSessions);

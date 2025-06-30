@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { ToolSelection } from '../types';
 
+interface Tool {
+  name: string;
+  description: string;
+  category: string;
+  parameters: Record<string, unknown>;
+}
+
 interface ToolsResponse {
   success: boolean;
-  tools: Array<{
-    name: string;
-    description: string;
-    category: string;
-    parameters: any;
-  }>;
-  toolsByCategory: Record<string, any[]>;
+  tools: Tool[];
+  toolsByCategory: Record<string, Tool[]>;
   categories: string[];
   totalCount: number;
 }

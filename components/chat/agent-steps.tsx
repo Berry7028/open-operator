@@ -41,13 +41,19 @@ export function AgentSteps({ steps }: AgentStepsProps) {
     }
   };
 
-  const getToolResultStatus = (toolResult: any) => {
-    if (!toolResult) return null;
-    if (toolResult.success === false) {
-      return <XCircle className="h-4 w-4 text-destructive" />;
-    }
-    if (toolResult.success === true) {
-      return <CheckCircle className="h-4 w-4 text-green-500" />;
+  const getToolResultStatus = (toolResult: unknown) => {
+    if (
+      toolResult &&
+      typeof toolResult === 'object' &&
+      'success' in toolResult
+    ) {
+      const result = toolResult as { success: boolean };
+      if (result.success === false) {
+        return <XCircle className="h-4 w-4 text-destructive" />;
+      }
+      if (result.success === true) {
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      }
     }
     return null;
   };

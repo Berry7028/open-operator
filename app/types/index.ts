@@ -55,7 +55,7 @@ export interface BrowserStep {
   tool: "GOTO" | "ACT" | "EXTRACT" | "OBSERVE" | "CLOSE" | "WAIT" | "NAVBACK" | "CALL_TOOL";
   instruction: string;
   stepNumber?: number;
-  toolResult?: any;
+  toolResult?: unknown;
 }
 
 export interface ToolSelection {

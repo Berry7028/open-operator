@@ -6,12 +6,15 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+// セッション状態管理
+const activeSessions = new Map<string, { sessionId: string, startedAt: Date, isActive: boolean }>();
+
 export interface AgentTool {
   name: string;
   description: string;
   category: string;
   parameters: z.ZodSchema;
-  execute: (params: any) => Promise<any>;
+  execute: (params: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
 
 // Define workspace directories
@@ -100,6 +103,19 @@ const searchWebSchema = z.object({
   maxResults: z.number().optional().default(5),
 });
 
+// セッション関連のスキーマ
+const startBrowserSessionSchema = z.object({
+  sessionId: z.string().describe("Unique session ID for the browser session"),
+});
+
+const getBrowserSessionStatusSchema = z.object({
+  sessionId: z.string().describe("Session ID to check status for"),
+});
+
+const closeBrowserSessionSchema = z.object({
+  sessionId: z.string().describe("Session ID to close"),
+});
+
 // Helper functions
 function sanitizePath(inputPath: string): string {
   // Remove any path traversal attempts
@@ -179,7 +195,155 @@ Created: ${new Date().toISOString()}
   return filename;
 }
 
+// セッション管理のヘルパー関数
+export function isSessionActive(sessionId: string): boolean {
+  const session = activeSessions.get(sessionId);
+  return session ? session.isActive : false;
+}
+
+export function startSession(sessionId: string): void {
+  activeSessions.set(sessionId, {
+    sessionId,
+    startedAt: new Date(),
+    isActive: true
+  });
+}
+
+export function closeSession(sessionId: string): void {
+  const session = activeSessions.get(sessionId);
+  if (session) {
+    session.isActive = false;
+    activeSessions.set(sessionId, session);
+  }
+}
+
+export function getSessionStatus(sessionId: string) {
+  return activeSessions.get(sessionId) || null;
+}
+
 export const availableTools: AgentTool[] = [
+  // Browser Session Management Tools
+  {
+    name: "start_browser_session",
+    description: "Start a new browser session for web automation tasks. This enables browser automation tools like navigation, interaction, and data extraction.",
+    category: "browser",
+    parameters: startBrowserSessionSchema,
+    execute: async (params) => {
+      try {
+        const { sessionId } = params as { sessionId: string };
+        
+        if (isSessionActive(sessionId)) {
+          return {
+            success: false,
+            error: `Session ${sessionId} is already active`,
+          };
+        }
+        
+        // Check if Browserbase is configured
+        if (!process.env.BROWSERBASE_API_KEY || process.env.BROWSERBASE_API_KEY === 'your_browserbase_api_key_here') {
+          console.warn("Browserbase not configured, using mock session");
+          startSession(sessionId);
+          return {
+            success: true,
+            message: `Mock browser session ${sessionId} started successfully (Browserbase not configured)`,
+            sessionId,
+            startedAt: new Date().toISOString(),
+            mode: "mock",
+          };
+        }
+        
+        // Mark session as active in our tracking
+        startSession(sessionId);
+        
+        return {
+          success: true,
+          message: `Browser session ${sessionId} started successfully. You can now use browser automation tools like navigation, clicking, and data extraction.`,
+          sessionId,
+          startedAt: new Date().toISOString(),
+          mode: "browserbase",
+          availableTools: [
+            "Navigate to websites (GOTO)",
+            "Interact with page elements (ACT)", 
+            "Extract data from pages (EXTRACT)",
+            "Observe page elements (OBSERVE)",
+            "Take screenshots (SCREENSHOT)",
+            "Wait for page loads (WAIT)",
+            "Navigate back (NAVBACK)"
+          ]
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to start browser session: ${error}`,
+        };
+      }
+    },
+  },
+  {
+    name: "get_browser_session_status",
+    description: "Check the status of a browser session",
+    category: "browser", 
+    parameters: getBrowserSessionStatusSchema,
+    execute: async (params) => {
+      try {
+        const { sessionId } = params as { sessionId: string };
+        const session = getSessionStatus(sessionId);
+        
+        if (!session) {
+          return {
+            success: true,
+            status: "not_found",
+            message: `No session found with ID: ${sessionId}`,
+          };
+        }
+        
+        return {
+          success: true,
+          status: session.isActive ? "active" : "inactive",
+          sessionId: session.sessionId,
+          startedAt: session.startedAt.toISOString(),
+          isActive: session.isActive,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to get session status: ${error}`,
+        };
+      }
+    },
+  },
+  {
+    name: "close_browser_session",
+    description: "Close an active browser session",
+    category: "browser",
+    parameters: closeBrowserSessionSchema,
+    execute: async (params) => {
+      try {
+        const { sessionId } = params as { sessionId: string };
+        
+        if (!isSessionActive(sessionId)) {
+          return {
+            success: false,
+            error: `Session ${sessionId} is not active or does not exist`,
+          };
+        }
+        
+        closeSession(sessionId);
+        
+        return {
+          success: true,
+          message: `Browser session ${sessionId} closed successfully`,
+          sessionId,
+          closedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to close browser session: ${error}`,
+        };
+      }
+    },
+  },
   // File System Tools
   {
     name: "create_file",
@@ -189,7 +353,7 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path, content } = params;
+        const { path, content } = params as { path: string; content: string };
         const sanitizedPath = sanitizePath(path);
         const fullPath = join(WORKSPACE_DIR, sanitizedPath);
         
@@ -223,7 +387,7 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path } = params;
+        const { path } = params as { path: string };
         const sanitizedPath = sanitizePath(path);
         const fullPath = join(WORKSPACE_DIR, sanitizedPath);
         
@@ -250,7 +414,7 @@ export const availableTools: AgentTool[] = [
     parameters: readFileSchema,
     execute: async (params) => {
       try {
-        const { path } = params;
+        const { path } = params as { path: string };
         const sanitizedPath = sanitizePath(path);
         const fullPath = join(WORKSPACE_DIR, sanitizedPath);
         
@@ -280,7 +444,7 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { path = "." } = params;
+        const { path = "." } = params as { path?: string };
         const sanitizedPath = sanitizePath(path);
         const fullPath = join(WORKSPACE_DIR, sanitizedPath);
         
@@ -322,7 +486,12 @@ export const availableTools: AgentTool[] = [
     parameters: generateCodeSchema,
     execute: async (params) => {
       try {
-        const { language, description, framework, filename } = params;
+        const { language, description, framework, filename } = params as {
+          language: string;
+          description: string;
+          framework?: string;
+          filename?: string;
+        };
         
         // Generate code based on language and description
         let generatedCode = "";
@@ -352,7 +521,7 @@ export const availableTools: AgentTool[] = [
             fileExtension = ".txt";
         }
 
-        const result: any = {
+        const result: Record<string, unknown> = {
           success: true,
           code: generatedCode,
           language,
@@ -391,7 +560,10 @@ export const availableTools: AgentTool[] = [
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { code, description } = params;
+        const { code, description } = params as {
+          code: string;
+          description?: string;
+        };
         
         // Create a temporary Python file
         const timestamp = Date.now();
@@ -458,7 +630,7 @@ if __name__ == "__main__":
     parameters: analyzeCodeSchema,
     execute: async (params) => {
       try {
-        const { code, language } = params;
+        const { code, language } = params as { code: string; language: string };
         
         // Basic code analysis
         const lines = code.split('\n');
@@ -534,7 +706,12 @@ if __name__ == "__main__":
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { title, description, priority, dueDate } = params;
+        const { title, description, priority, dueDate } = params as {
+          title: string;
+          description?: string;
+          priority: "low" | "medium" | "high";
+          dueDate?: string;
+        };
         
         const newTodo: TodoItem = {
           id: `todo_${Date.now()}`,
@@ -542,7 +719,7 @@ if __name__ == "__main__":
           description: description || '',
           priority,
           status: "pending",
-          dueDate,
+          dueDate: dueDate || null,
           filename: '', // Will be set after saving
         };
         
@@ -572,7 +749,9 @@ if __name__ == "__main__":
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { status } = params;
+        const { status } = params as {
+          status: "all" | "pending" | "completed";
+        };
         
         const todos = await loadTodos();
         let filteredTodos = todos;
@@ -604,7 +783,7 @@ if __name__ == "__main__":
     execute: async (params) => {
       try {
         await ensureDirectories();
-        const { id, ...updates } = params;
+        const { id, ...updates } = params as { id: string; [key: string]: unknown };
         
         const todos = await loadTodos();
         const todo = todos.find(t => t.id === id);
@@ -643,7 +822,7 @@ if __name__ == "__main__":
     parameters: getCurrentTimeSchema,
     execute: async (params) => {
       try {
-        const { timezone = "UTC" } = params;
+        const { timezone = "UTC" } = params as { timezone?: string };
         const now = new Date();
         
         return {
@@ -669,7 +848,7 @@ if __name__ == "__main__":
     parameters: calculateSchema,
     execute: async (params) => {
       await ensureDirectories();
-      const { expression } = params;
+      const { expression } = params as { expression: string };
       
       try {
         
@@ -757,7 +936,10 @@ print(f"Type: {type(result).__name__}")
     parameters: searchWebSchema,
     execute: async (params) => {
       try {
-        const { query, maxResults } = params;
+        const { query, maxResults } = params as {
+          query: string;
+          maxResults?: number;
+        };
         
         // Simulate web search results
         const simulatedResults = [
@@ -795,7 +977,7 @@ print(f"Type: {type(result).__name__}")
   },
 ];
 
-export async function executeAgentTool(toolName: string, params: any): Promise<any> {
+export async function executeAgentTool(toolName: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   const tool = availableTools.find(t => t.name === toolName);
   
   if (!tool) {

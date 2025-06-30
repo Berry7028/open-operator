@@ -3,7 +3,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { ChatSession } from "../../types";
-import { useWindowSize } from "usehooks-ts";
 import Image from "next/image";
 
 interface ChatSidebarProps {
@@ -28,8 +27,6 @@ export default function ChatSidebar({
   onToggleCollapse,
 }: ChatSidebarProps) {
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
-  const { width } = useWindowSize();
-  const isMobile = width ? width < 768 : false;
 
   const sidebarWidth = isCollapsed ? 60 : 280;
 

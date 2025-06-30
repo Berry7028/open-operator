@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // Session storage for API keys (in production, use secure session storage)
-let sessionApiKeys: Record<string, string> = {};
+const sessionApiKeys: Record<string, string> = {};
 
 export async function POST(request: Request) {
   try {
