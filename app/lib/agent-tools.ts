@@ -9,6 +9,55 @@ const execAsync = promisify(exec);
 // セッション状態管理
 const activeSessions = new Map<string, { sessionId: string, startedAt: Date, isActive: boolean }>();
 
+// --- Tool Call Loop Detection ---
+interface ToolCallRecord {
+  toolName: string;
+  params: Record<string, unknown>;
+  timestamp: number;
+}
+
+const MAX_HISTORY_AGE_MS = 60 * 1000; // 1 minute
+const LOOP_DETECTION_WINDOW_MS = 5 * 1000; // 5 seconds
+const MAX_IDENTICAL_CALLS_IN_WINDOW = 3;
+
+let toolCallHistory: ToolCallRecord[] = [];
+
+function pruneOldHistory() {
+  const now = Date.now();
+  toolCallHistory = toolCallHistory.filter(
+    (record) => now - record.timestamp < MAX_HISTORY_AGE_MS
+  );
+}
+
+function detectLoop(toolName: string, params: Record<string, unknown>): boolean {
+  pruneOldHistory();
+  const now = Date.now();
+  const recentCalls = toolCallHistory.filter(
+    (record) =>
+      record.toolName === toolName &&
+      now - record.timestamp < LOOP_DETECTION_WINDOW_MS
+  );
+
+  if (recentCalls.length < MAX_IDENTICAL_CALLS_IN_WINDOW - 1) {
+    return false;
+  }
+
+  // Deep comparison of params
+  const stringifiedParams = JSON.stringify(params); // Stringify once for efficiency
+  const identicalRecentCalls = recentCalls.filter(
+      (record) => JSON.stringify(record.params) === stringifiedParams
+  );
+
+  return identicalRecentCalls.length >= MAX_IDENTICAL_CALLS_IN_WINDOW - 1;
+}
+
+function recordCall(toolName: string, params: Record<string, unknown>) {
+  // Prune before adding to keep history size manageable and ensure it's based on the most current state
+  pruneOldHistory();
+  toolCallHistory.push({ toolName, params, timestamp: Date.now() });
+}
+// --- End Tool Call Loop Detection ---
+
 export interface AgentTool {
   name: string;
   description: string;
@@ -377,10 +426,24 @@ export const availableTools: AgentTool[] = [
           size: stats.size,
           fullPath,
         };
-      } catch (error) {
+      } catch (error: any) {
+        let errorMessage = `Failed to create file: ${error?.message || String(error)}`;
+        let errorType = "FileWriteError";
+        const { path } = params as { path: string; content: string }; // Ensure path is defined
+        const sanitizedPath = sanitizePath(path); // Sanitize for consistent error reporting
+
+        if (error.code === 'EACCES') {
+          errorMessage = `Permission denied when trying to write to workspace/${sanitizedPath}`;
+          errorType = "PermissionError";
+        } else if (error.code === 'EISDIR') {
+          errorMessage = `Cannot create file, workspace/${sanitizedPath} is a directory.`;
+          errorType = "IsDirectoryError";
+        }
         return {
           success: false,
-          error: `Failed to create file: ${error}`,
+          error: errorMessage,
+          errorType,
+          path: sanitizedPath, // Return sanitizedPath
         };
       }
     },
@@ -405,10 +468,26 @@ export const availableTools: AgentTool[] = [
           path: sanitizedPath,
           fullPath,
         };
-      } catch (error) {
+      } catch (error: any) {
+        let errorMessage = `Failed to create folder: ${error?.message || String(error)}`;
+        let errorType = "FolderCreationError";
+        const { path } = params as { path: string }; // Ensure path is defined
+        const sanitizedPath = sanitizePath(path); // Sanitize for consistent error reporting
+
+        if (error.code === 'EACCES') {
+          errorMessage = `Permission denied when trying to create folder at workspace/${sanitizedPath}`;
+          errorType = "PermissionError";
+        } else if (error.code === 'EEXIST') {
+          // Note: fs.mkdir with recursive: true doesn't throw EEXIST if path is a directory.
+          // This would typically be if the path exists and is a FILE.
+          errorMessage = `Cannot create folder, path workspace/${sanitizedPath} may already exist as a file.`;
+          errorType = "PathExistsAsFileError";
+        }
         return {
           success: false,
-          error: `Failed to create folder: ${error}`,
+          error: errorMessage,
+          errorType,
+          path: sanitizedPath,
         };
       }
     },
@@ -434,10 +513,24 @@ export const availableTools: AgentTool[] = [
           size: stats.size,
           lastModified: stats.mtime,
         };
-      } catch (error) {
+      } catch (error: any) {
+        let errorMessage = `Failed to read file: ${error?.message || String(error)}`;
+        let errorType = "FileReadError";
+        const { path } = params as { path: string }; // Ensure path is defined for error reporting
+        const sanitizedPath = sanitizePath(path); // Also sanitize for consistent error reporting
+
+        if (error.code === 'ENOENT') {
+          errorMessage = `File not found at workspace/${sanitizedPath}`;
+          errorType = "FileNotFoundError";
+        } else if (error.code === 'EACCES') {
+          errorMessage = `Permission denied when trying to read workspace/${sanitizedPath}`;
+          errorType = "PermissionError";
+        }
         return {
           success: false,
-          error: `Failed to read file: ${error}`,
+          error: errorMessage,
+          errorType,
+          path: sanitizedPath,
         };
       }
     },
@@ -475,10 +568,27 @@ export const availableTools: AgentTool[] = [
           path: sanitizedPath,
           count: files.length,
         };
-      } catch (error) {
+      } catch (error: any) {
+        let errorMessage = `Failed to list files: ${error?.message || String(error)}`;
+        let errorType = "DirectoryListingError";
+        const { path = "." } = params as { path?: string }; // Ensure path is defined
+        const sanitizedPath = sanitizePath(path); // Sanitize for consistent error reporting
+
+        if (error.code === 'ENOENT') {
+          errorMessage = `Directory not found at workspace/${sanitizedPath}`;
+          errorType = "DirectoryNotFoundError";
+        } else if (error.code === 'EACCES') {
+          errorMessage = `Permission denied when trying to list files in workspace/${sanitizedPath}`;
+          errorType = "PermissionError";
+        } else if (error.code === 'ENOTDIR') {
+          errorMessage = `Cannot list files, workspace/${sanitizedPath} is not a directory.`;
+          errorType = "NotDirectoryError";
+        }
         return {
           success: false,
-          error: `Failed to list files: ${error}`,
+          error: errorMessage,
+          errorType,
+          path: sanitizedPath,
         };
       }
     },
@@ -594,7 +704,8 @@ def restricted_exec():
     try:
 ${code.split('\n').map((line: string) => '        ' + line).join('\n')}
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"ErrorType: {type(e).__name__}")
+        print(f"ErrorMessage: {str(e)}")
         return False
     return True
 
@@ -613,18 +724,71 @@ if __name__ == "__main__":
         // Clean up the temporary file
         await fs.unlink(filePath);
         
+        let pythonSuccess = !stderr; // Assume success if stderr is empty
+        let extractedErrorType: string | null = null;
+        let finalOutput = stdout;
+        let finalErrorMsg = stderr; // Prefer stderr for error messages initially
+
+        if (stderr) { // If stderr has content, it's an error
+            pythonSuccess = false;
+            const pyErrorMatchStderr = stderr.match(/^(\w+Error):|Traceback \(most recent call last\):/m);
+            if (pyErrorMatchStderr && pyErrorMatchStderr[1]) {
+                extractedErrorType = pyErrorMatchStderr[1];
+            } else if (pyErrorMatchStderr) { // Traceback found but no specific Error type captured
+                extractedErrorType = "PythonTraceback";
+            }
+            finalOutput = ""; // Clear stdout as error is in stderr
+        } else if (stdout.includes("ErrorType:") && stdout.includes("ErrorMessage:")) {
+            // If no stderr, but our wrapped code printed ErrorType/ErrorMessage to stdout
+            pythonSuccess = false;
+            finalErrorMsg = stdout; // The whole stdout is the error info
+            finalOutput = "";     // Clear stdout representation
+
+            const typeMatch = stdout.match(/ErrorType: (\w+)/);
+            if (typeMatch && typeMatch[1]) {
+                extractedErrorType = typeMatch[1];
+            } else {
+                extractedErrorType = "PythonWrapperReportedError";
+            }
+            // The error message part can be extracted if needed, but for now, the whole stdout is in finalErrorMsg
+            // const messageMatch = stdout.match(/ErrorMessage: ([\s\S]+)/);
+            // if (messageMatch && messageMatch[1]) { /* use messageMatch[1] */ }
+        }
+        // No specific "Error: " prefix check from stdout anymore, relying on ErrorType/ErrorMessage
+
         return {
-          success: true,
-          output: stdout,
-          error: stderr,
+          success: pythonSuccess,
+          output: finalOutput, // Contains original stdout if no error, or cleared if error
+          error: finalErrorMsg,    // Contains original stderr, or stdout if that held the ErrorType/ErrorMessage
+          errorType: pythonSuccess ? null : extractedErrorType || "PythonRuntimeError", // Fallback if no type extracted
           description: description || '',
           executedAt: new Date().toISOString(),
         };
-      } catch (error) {
+      } catch (error: any) {
+        let errorMessage = `Failed to execute Python code: ${error?.message || String(error)}`;
+        let errorType = "ExecutionError"; // This is for errors in execAsync itself
+
+        if (error?.stderr) {
+          errorMessage += `\nStderr: ${error.stderr}`;
+          // Try to extract Python error type
+          const pyErrorMatch = error.stderr.match(/^(\w+Error):/m);
+          if (pyErrorMatch && pyErrorMatch[1]) {
+            errorType = pyErrorMatch[1];
+          }
+        }
+        if (error?.killed) {
+          errorMessage += "\nThe process was killed, possibly due to timeout.";
+          errorType = "TimeoutError";
+        }
+
         return {
           success: false,
-          error: `Failed to execute Python code: ${error}`,
+          error: errorMessage,
+          errorType, // Added errorType
           description: params.description || '',
+          // Ensure stdout and stderr are returned even in case of some errors
+          output: error?.stdout || null,
+          stderr: error?.stderr || null,
         };
       }
     },
@@ -926,10 +1090,11 @@ print(f"Type: {type(result).__name__}")
           output: stdout,
           error: stderr || (result.startsWith('Error:') ? result : null),
         };
-      } catch (error) {
+      } catch (error: any) {
         return {
           success: false,
-          error: `Failed to calculate: ${error}`,
+          error: `Failed to calculate: ${error?.message || String(error)}`,
+          errorType: "CalculationError",
           expression,
         };
       }
@@ -1002,6 +1167,19 @@ print(f"Type: {type(result).__name__}")
 ];
 
 export async function executeAgentTool(toolName: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (detectLoop(toolName, params)) {
+    return {
+      success: false,
+      error: `Tool "${toolName}" was called repeatedly with the same parameters in a short period. This may indicate an infinite loop.`,
+      toolName,
+      inputParams: params,
+      suggestion: "Review the agent's logic to prevent repetitive calls or modify the parameters.",
+      timestamp: new Date().toISOString(),
+      isLoopDetected: true, // Flag to indicate loop detection
+    };
+  }
+  recordCall(toolName, params); // Record the call after loop detection, only if not a loop
+
   const tool = availableTools.find(t => t.name === toolName);
   
   if (!tool) {
@@ -1079,4 +1257,9 @@ export function getToolsByCategory() {
 
 export function getToolCategories() {
   return [...new Set(availableTools.map(tool => tool.category))];
+}
+
+// For testing purposes only
+export function _internal_resetToolCallHistory() {
+  toolCallHistory = [];
 }
