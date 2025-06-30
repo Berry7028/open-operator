@@ -10,7 +10,7 @@ import { getSessionApiKey } from "../../lib/session-utils";
 
 // Initialize LLM clients based on available API keys
 const getModelClient = (modelId: string): LanguageModelV1 => {
-  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-')) {
+  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-')) {
     const apiKey = getSessionApiKey('OPENAI_API_KEY');
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
@@ -212,30 +212,14 @@ async function sendPrompt({
     console.error("Error getting page info:", error);
   }
 
-  // Filter available tools based on selection
-  const enabledTools = selectedTools.length > 0 
-    ? availableTools.filter(tool => selectedTools.includes(tool.name))
-    : availableTools;
+  // Build a full tool availability list for the LLM
+  const toolsStatusList = availableTools.map(tool => `- ${tool.name}: ${selectedTools.includes(tool.name) ? 'enabled: true' : 'enabled: false'}`);
 
-  const toolsDescription = enabledTools.length > 0 
-    ? `\n\nAvailable Local Tools (PREFERRED):
-ALWAYS prioritize using local tools over web browsing when possible. Use CALL_TOOL for these tasks:
+  const toolsDescription = `\n\nTOOL AVAILABILITY LIST (enabled = can use):\n${toolsStatusList.join('\n')}
 
-${enabledTools.map(tool => 
-  `- ${tool.name}: ${tool.description} (Category: ${tool.category})`
-).join('\n')}
-
-To use a tool (PREFERRED METHOD):
-- tool: "CALL_TOOL"
-- instruction: JSON string with format: {"toolName": "tool_name", "params": {...}}
-
-Examples:
-- Calculations: {"toolName": "calculate", "params": {"expression": "2+3*4"}}
-- Create Todo: {"toolName": "create_todo", "params": {"title": "Complete project", "priority": "high"}}
-- Write code: {"toolName": "generate_code", "params": {"language": "python", "description": "sort a list"}}
-- Execute Python: {"toolName": "execute_python", "params": {"code": "print(sum([1,2,3,4,5]))"}}
-- File operations: {"toolName": "create_file", "params": {"path": "hello.txt", "content": "Hello World"}}`
-    : '';
+RULES FOR USING TOOLS:
+1. ONLY use tools with enabled: true.
+2. If the user requests a tool with enabled: false, respond with a brief apology and explain that the tool is not available in the current session. Do NOT attempt to use it.`;
 
   const shouldUseBrowser = previousSteps.some(step => step.tool === "GOTO") || currentUrl;
   
@@ -346,9 +330,8 @@ async function analyzeGoalForTools(goal: string, modelId: string, selectedTools:
   params?: Record<string, unknown>;
   reasoning: string;
 }> {
-  const enabledTools = selectedTools.length > 0 
-    ? availableTools.filter(tool => selectedTools.includes(tool.name))
-    : availableTools;
+  // Use only tools explicitly selected by the user.
+  const enabledTools = availableTools.filter(tool => selectedTools.includes(tool.name));
 
   const message: CoreMessage = {
     role: "user",
@@ -358,9 +341,14 @@ async function analyzeGoalForTools(goal: string, modelId: string, selectedTools:
         text: `Analyze this goal: "${goal}"
 
 Available local tools:
-${enabledTools.map(tool => 
-  `- ${tool.name}: ${tool.description} (Category: ${tool.category})`
-).join('\n')}
+${enabledTools.map(tool => `- ${tool.name}: ${tool.description} (Category: ${tool.category})`).join('\n')}
+
+Full tool availability list (enabled = can use):
+${availableTools.map(tool => `- ${tool.name}: ${selectedTools.includes(tool.name) ? 'enabled: true' : 'enabled: false'}`).join('\n')}
+
+Rules:
+1. Only propose using tools where enabled = true.
+2. If the user goal explicitly requires a tool with enabled = false, respond that it cannot be accomplished with local tools and consider web browsing instead.
 
 Determine if this goal can be accomplished using local tools instead of web browsing.
 
@@ -406,9 +394,8 @@ async function parseNaturalLanguageInstruction(
   modelId: string, 
   selectedTools: string[] = []
 ): Promise<{ toolName: string; params: Record<string, unknown> }> {
-  const enabledTools = selectedTools.length > 0 
-    ? availableTools.filter(tool => selectedTools.includes(tool.name))
-    : availableTools;
+  // Use only tools explicitly selected by the user.
+  const enabledTools = availableTools.filter(tool => selectedTools.includes(tool.name));
 
   const message: CoreMessage = {
     role: "user",
@@ -748,6 +735,21 @@ export async function POST(request: Request) {
             
             if (!toolName) {
               throw new Error('Missing toolName in instruction');
+            }
+            
+            // Check if the requested tool is enabled in this session
+            if (!selectedTools.includes(toolName)) {
+              const aiResponse = language === 'ja'
+                ? `申し訳ございませんが、ツール「${toolName}」はこのセッションでは利用できません。`
+                : `Sorry, I cannot use the "${toolName}" tool because it is not enabled in this session.`;
+
+              extraction = {
+                success: false,
+                error: `Tool ${toolName} is not enabled`,
+                aiResponse,
+              };
+
+              return NextResponse.json({ success: true, extraction, done: false });
             }
             
             const toolResult = await executeAgentTool(toolName, params || {});

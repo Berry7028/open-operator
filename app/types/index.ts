@@ -13,6 +13,10 @@ export interface LLMModel {
   provider: string;
   maxTokens?: number;
   supportsVision?: boolean;
+  supportsTools?: boolean;
+  supportsAudio?: boolean;
+  supportsDeepThink?: boolean;
+  specialization?: string;
 }
 
 export interface ChatSession {

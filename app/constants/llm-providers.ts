@@ -11,6 +11,9 @@ export const LLM_PROVIDERS: LLMProvider[] = [
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', maxTokens: 128000, supportsVision: true },
       { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'openai', maxTokens: 128000, supportsVision: true },
       { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'openai', maxTokens: 16385 },
+      { id: 'o3-mini', name: 'o3 Mini', provider: 'openai', maxTokens: 128000, supportsTools: true },
+      { id: 'o1-preview', name: 'o1 Preview', provider: 'openai', maxTokens: 128000 },
+      { id: 'o1-mini', name: 'o1 Mini', provider: 'openai', maxTokens: 65536 },
     ],
   },
   {
@@ -31,8 +34,10 @@ export const LLM_PROVIDERS: LLMProvider[] = [
     apiKeyLabel: 'Google AI API Key',
     models: [
       { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash', provider: 'google', maxTokens: 1000000, supportsVision: true },
+      { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', provider: 'google', maxTokens: 1000000, supportsVision: true },
       { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'google', maxTokens: 2000000, supportsVision: true },
       { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'google', maxTokens: 1000000, supportsVision: true },
+      { id: 'gemini-2.0-flash-thinking-exp', name: 'Gemini 2.0 Flash Thinking', provider: 'google', maxTokens: 1000000, supportsVision: true, supportsDeepThink: true },
     ],
   },
 ];

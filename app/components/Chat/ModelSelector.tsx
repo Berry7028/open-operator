@@ -85,11 +85,28 @@ export default function ModelSelector({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm">{model.name}</span>
-                      {model.supportsVision && (
-                        <span className="text-xs bg-purple-900/50 text-purple-300 px-2 py-0.5 rounded">
-                          Vision
-                        </span>
-                      )}
+                      <div className="flex gap-1">
+                        {model.supportsVision && (
+                          <span className="text-xs bg-purple-900/50 text-purple-300 px-2 py-0.5 rounded">
+                            Vision
+                          </span>
+                        )}
+                        {model.supportsTools && (
+                          <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">
+                            Tools
+                          </span>
+                        )}
+                        {model.supportsDeepThink && (
+                          <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">
+                            Think
+                          </span>
+                        )}
+                        {model.supportsAudio && (
+                          <span className="text-xs bg-orange-900/50 text-orange-300 px-2 py-0.5 rounded">
+                            Audio
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {model.maxTokens && (
                       <div className="text-xs text-gray-500 mt-1">

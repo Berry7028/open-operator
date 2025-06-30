@@ -241,6 +241,7 @@ export default function ChatInterface({
           body: JSON.stringify({
             sessionId,
             step: nextStepData.result,
+            selectedTools: session.selectedTools || [],
             action: "EXECUTE_STEP",
             language: settings.language || 'ja',
           }),

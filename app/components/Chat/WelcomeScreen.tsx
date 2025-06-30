@@ -44,7 +44,30 @@ export default function WelcomeScreen({
   onModelChange,
 }: WelcomeScreenProps) {
   const [input, setInput] = useState("");
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  // Persist selected tool selection in localStorage
+  const [selectedTools, _setSelectedTools] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('selected-tools');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (err) {
+        console.error('Failed to parse saved selected tools:', err);
+      }
+    }
+    return [];
+  });
+
+  // Wrapper to update state and persist to localStorage
+  const setSelectedTools = (tools: string[]) => {
+    _setSelectedTools(tools);
+    try {
+      localStorage.setItem('selected-tools', JSON.stringify(tools));
+    } catch (err) {
+      console.error('Failed to save selected tools:', err);
+    }
+  };
   const { models } = useModels();
   const { settings } = useSettings();
   const currentLanguage = settings.language || 'ja';
