@@ -5,32 +5,45 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
-import { availableTools, executeAgentTool, isSessionActive } from "../../lib/agent-tools";
+import { availableTools, executeAgentTool, isSessionActive } from "../../lib/tools";
 import { getSessionApiKey } from "../../lib/session-utils";
 
 // Initialize LLM clients based on available API keys
 const getModelClient = (modelId: string): LanguageModelV1 => {
-  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-')) {
+  // modelIdの安全性チェックとデフォルト値設定
+  const safeModelId = modelId || "claude-3-5-sonnet-20241022";
+  
+  if (safeModelId.startsWith('gpt-') || safeModelId.startsWith('o1-') || safeModelId.startsWith('o3-')) {
     const apiKey = getSessionApiKey('OPENAI_API_KEY');
     if (!apiKey) {
       throw new Error('OpenAI API key not configured');
     }
     const provider = createOpenAI({ apiKey });
-    return provider(modelId);
-  } else if (modelId.startsWith('claude-')) {
+    return provider(safeModelId);
+  } else if (safeModelId.startsWith('claude-')) {
     const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
     if (!apiKey) {
       throw new Error('Anthropic API key not configured');
     }
     const provider = createAnthropic({ apiKey });
-    return provider(modelId);
-  } else if (modelId.startsWith('gemini-')) {
+    return provider(safeModelId);
+  } else if (safeModelId.startsWith('gemini-')) {
     const apiKey = getSessionApiKey('GOOGLE_AI_API_KEY');
     if (!apiKey) {
       throw new Error('Google AI API key not configured');
     }
     const provider = createGoogleGenerativeAI({ apiKey });
-    return provider(modelId);
+    return provider(safeModelId);
+  } else if (safeModelId.includes('minimax/') || safeModelId.includes('openrouter')) {
+    const apiKey = getSessionApiKey('OPENROUTER_API_KEY');
+    if (!apiKey) {
+      throw new Error('OpenRouter API key not configured');
+    }
+    const provider = createOpenAI({ 
+      apiKey,
+      baseURL: 'https://openrouter.ai/api/v1'
+    });
+    return provider(safeModelId);
   } else {
     // Default fallback
     const apiKey = getSessionApiKey('ANTHROPIC_API_KEY');
@@ -628,7 +641,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { goal, sessionId, previousSteps = [], previousExtraction = null, action, modelId, selectedTools = [], language = 'ja' } = body;
+    const { goal, sessionId, previousSteps = [], previousExtraction = null, action, selectedTools = [], language = 'ja' } = body;
+    
+    // modelIdの安全な取得とデフォルト値設定
+    const modelId = body.modelId || "claude-3-5-sonnet-20241022";
 
     if (!sessionId) {
       return NextResponse.json(

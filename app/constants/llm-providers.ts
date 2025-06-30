@@ -40,6 +40,24 @@ export const LLM_PROVIDERS: LLMProvider[] = [
       { id: 'gemini-2.0-flash-thinking-exp', name: 'Gemini 2.0 Flash Thinking', provider: 'google', maxTokens: 1000000, supportsVision: true, supportsDeepThink: true },
     ],
   },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    requiresApiKey: true,
+    apiKeyLabel: 'OpenRouter API Key',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    models: [
+      { 
+        id: 'minimax/minimax-m1:extended', 
+        name: 'MiniMax M1 Extended', 
+        provider: 'openrouter', 
+        maxTokens: 1000000, 
+        supportsVision: true,
+        supportsTools: true,
+        specialization: 'Advanced reasoning and multi-modal capabilities'
+      },
+    ],
+  },
 ];
 
-export const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022';
+export const DEFAULT_MODEL = 'claude-3-5-haiku-20241022';

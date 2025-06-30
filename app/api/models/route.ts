@@ -56,6 +56,27 @@ export async function GET() {
       }
     }
 
+    // OpenRouter models
+    const openrouterKey = getSessionApiKey('OPENROUTER_API_KEY');
+    if (openrouterKey) {
+      try {
+        const openrouterModels = [
+          { 
+            id: 'minimax/minimax-m1:extended', 
+            name: 'MiniMax M1 Extended', 
+            provider: 'openrouter', 
+            maxTokens: 1000000, 
+            supportsVision: true,
+            supportsTools: true,
+            specialization: 'Advanced reasoning and multi-modal capabilities'
+          },
+        ];
+        models.push(...openrouterModels);
+      } catch (error) {
+        console.error('Failed to fetch OpenRouter models:', error);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       models,
@@ -63,6 +84,7 @@ export async function GET() {
         openai: { enabled: !!openaiKey, name: 'OpenAI' },
         anthropic: { enabled: !!anthropicKey, name: 'Anthropic' },
         google: { enabled: !!googleKey, name: 'Google' },
+        openrouter: { enabled: !!openrouterKey, name: 'OpenRouter' },
       }
     });
   } catch (error) {

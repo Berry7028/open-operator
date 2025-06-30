@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { availableTools, getToolsByCategory, getToolCategories } from "../../lib/agent-tools";
+import { availableTools, getToolsByCategory, getToolCategories } from "../../lib/tools";
 
 interface ParameterField {
   required: boolean;
